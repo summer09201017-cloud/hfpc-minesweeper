@@ -3,6 +3,8 @@ import { useGame } from '../store';
 import { CUSTOM_LIMITS, type Difficulty, PRESETS } from '../game/types';
 import { clampSpec } from '../game/board';
 import { clearRecords, getStat, recordKey } from '../game/records';
+import { BACKDROPS, THEMES } from '../theme';
+import { TRACKS } from '../audio/bgm';
 
 export function Dialog({
   title,
@@ -94,12 +96,12 @@ export function CustomDialog({ onClose }: { onClose: () => void }): JSX.Element 
           />
         </label>
       </div>
-      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#444' }}>
+      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-dim)' }}>
         範圍:寬 {CUSTOM_LIMITS.minWidth}–{CUSTOM_LIMITS.maxWidth}、高{' '}
         {CUSTOM_LIMITS.minHeight}–{CUSTOM_LIMITS.maxHeight};雷數最多留 9 格空位給首點保護。
       </p>
       {changed ? (
-        <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#8a4b00' }}>
+        <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--ink)', fontWeight: 700 }}>
           ⚠ 超出範圍,實際會用 {preview.width}×{preview.height} / {preview.mines} 雷。
         </p>
       ) : null}
@@ -116,6 +118,10 @@ export function OptionsDialog({ onClose }: { onClose: () => void }): JSX.Element
   const sound = useGame((s) => s.sound);
   const flagMode = useGame((s) => s.flagMode);
   const cellSize = useGame((s) => s.cellSize);
+  const theme = useGame((s) => s.theme);
+  const backdrop = useGame((s) => s.backdrop);
+  const music = useGame((s) => s.music);
+  const musicTrack = useGame((s) => s.musicTrack);
   const patch = useGame((s) => s.patchSettings);
 
   return (
@@ -159,6 +165,84 @@ export function OptionsDialog({ onClose }: { onClose: () => void }): JSX.Element
         標記(?):右鍵循環 旗 → ? → 空白
       </label>
 
+      <h3 style={{ marginTop: 14 }}>換皮(主題)</h3>
+      <div className="swatches">
+        {THEMES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="swatch-btn"
+            aria-pressed={theme === t.id}
+            onClick={() => patch({ theme: t.id })}
+            title={t.name}
+          >
+            <span className="swatch-chips" aria-hidden="true">
+              {t.swatch.map((c, i) => (
+                <i key={i} style={{ background: c }} />
+              ))}
+            </span>
+            {t.name}
+          </button>
+        ))}
+      </div>
+      <div className="hint" style={{ marginLeft: 0 }}>
+        每個主題都會整組換掉數字八色 —— 只換底色的話,深色皮上的「1」會直接看不見。
+        投影上課建議用「高對比」。
+      </div>
+
+      <h3 style={{ marginTop: 14 }}>換背景</h3>
+      <div className="swatches">
+        {BACKDROPS.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            className="backdrop-btn"
+            aria-pressed={backdrop === b.id}
+            onClick={() => patch({ backdrop: b.id })}
+            title={b.name}
+            style={{ background: b.bg ?? 'var(--desk-bg)' }}
+          >
+            {b.name}
+          </button>
+        ))}
+      </div>
+      <div className="hint" style={{ marginLeft: 0 }}>
+        背景和主題各選各的 —— 想要經典灰棋盤配夜空,或高對比棋盤配素色底,都行。
+      </div>
+
+      <h3 style={{ marginTop: 14 }}>背景音樂</h3>
+      <label>
+        <input
+          type="checkbox"
+          checked={music}
+          onChange={(e) => patch({ music: e.target.checked })}
+        />
+        播放背景音樂
+      </label>
+      <div className="hint">
+        和音效分開,可以只要音效不要音樂。三首都是原創、即時合成,沒有音檔也能離線播。
+      </div>
+      {music ? (
+        <div className="row">
+          {TRACKS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className="btn"
+              aria-pressed={musicTrack === t.id}
+              style={
+                musicTrack === t.id
+                  ? { borderColor: 'var(--shadow) var(--light) var(--light) var(--shadow)', fontWeight: 700 }
+                  : undefined
+              }
+              onClick={() => patch({ musicTrack: t.id })}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <h3 style={{ marginTop: 14 }}>操作與顯示</h3>
       <label>
         <input
@@ -192,7 +276,7 @@ export function OptionsDialog({ onClose }: { onClose: () => void }): JSX.Element
         >
           ＋ 放大
         </button>
-        <span style={{ fontSize: 12, color: '#444' }}>
+        <span style={{ fontSize: 12, color: 'var(--ink-dim)' }}>
           {cellSize > 0 ? `${cellSize}px` : '自動'}
         </span>
       </div>
@@ -274,7 +358,7 @@ export function RecordsDialog({ onClose }: { onClose: () => void }): JSX.Element
           })}
         </tbody>
       </table>
-      <p style={{ margin: '10px 0 0', fontSize: 12, color: '#444' }}>
+      <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--ink-dim)' }}>
         無猜盤明顯比一般盤好過,所以兩種分開記 —— 混在一起的話,一般盤的紀錄永遠破不了。
         <br />
         3BV = 這一盤「最少要點幾下」;3BV/秒 是速度,和最短時間不一定是同一局。

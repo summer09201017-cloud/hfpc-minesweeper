@@ -13,18 +13,22 @@
   --seg-bg: #000000;
   --seg-on: #ff0000;
   --seg-off: #3b0000;
-  --desk-1: #4a8ad4;
-  --desk-2: #23528f;
+  /* 桌面底 —— 主題與「背景」都只寫這一個變數(見 src/theme.ts) */
+  --desk-bg: linear-gradient(160deg, #4a8ad4, #23528f);
   --title-1: #0a5bd3;
   --title-2: #3f8ef5;
-}
-
-/* 深色版:只換底色與視窗外圍,棋盤本體維持經典灰(數字配色是招牌,不可以動) */
-:root[data-theme='dark'] {
-  --desk-1: #1b2330;
-  --desk-2: #0c1016;
-  --title-1: #263243;
-  --title-2: #3b4a60;
+  --title-ink: #ffffff;
+  --ink: #000000;
+  --ink-dim: #444444;
+  /* 數字八色:每個主題都要自己定義全部八色(深色皮配 #0000ff 的「1」根本看不見) */
+  --n1: #0000ff;
+  --n2: #008000;
+  --n3: #ff0000;
+  --n4: #000080;
+  --n5: #800000;
+  --n6: #008080;
+  --n7: #000000;
+  --n8: #808080;
 }
 
 * {
@@ -43,9 +47,10 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   min-height: var(--app-h, 100vh);
-  background: linear-gradient(160deg, var(--desk-1), var(--desk-2));
+  background: var(--desk-bg);
+  background-attachment: fixed;
   font-family: 'Segoe UI', 'Noto Sans TC', system-ui, sans-serif;
-  color: #000;
+  color: var(--ink);
   -webkit-text-size-adjust: 100%;
   overscroll-behavior: none;
 }
@@ -113,7 +118,7 @@ body {
   gap: 6px;
   padding: 3px 4px;
   background: linear-gradient(180deg, var(--title-2), var(--title-1));
-  color: #fff;
+  color: var(--title-ink, #fff);
   font-size: 13px;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -138,7 +143,7 @@ body {
   gap: 2px;
   padding: 2px 3px;
   background: var(--face);
-  border-bottom: 1px solid #9a9a9a;
+  border-bottom: 1px solid var(--shadow);
   position: relative;
 }
 
@@ -149,7 +154,7 @@ body {
   min-height: 32px;
   background: transparent;
   border: 1px solid transparent;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -189,7 +194,7 @@ body {
   min-height: 36px;
   background: transparent;
   border: 0;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -329,7 +334,7 @@ body {
 }
 
 .cell[data-wrong='true'] {
-  background: #c6c6c6;
+  background: var(--face);
 }
 
 .cell svg {
@@ -338,15 +343,75 @@ body {
   display: block;
 }
 
-/* XP 的數字配色,一個都不能換 —— 這是老玩家的肌肉記憶 */
-.cell[data-n='1'] { color: #0000ff; }
-.cell[data-n='2'] { color: #008000; }
-.cell[data-n='3'] { color: #ff0000; }
-.cell[data-n='4'] { color: #000080; }
-.cell[data-n='5'] { color: #800000; }
-.cell[data-n='6'] { color: #008080; }
-.cell[data-n='7'] { color: #000000; }
-.cell[data-n='8'] { color: #808080; }
+/* 數字配色由主題提供;預設值就是 XP 原色(老玩家的肌肉記憶)。
+   ★ 換皮時八色一定要整組換 —— 只換底色的話,深色皮上的「1」會直接消失。 */
+.cell[data-n='1'] { color: var(--n1); }
+.cell[data-n='2'] { color: var(--n2); }
+.cell[data-n='3'] { color: var(--n3); }
+.cell[data-n='4'] { color: var(--n4); }
+.cell[data-n='5'] { color: var(--n5); }
+.cell[data-n='6'] { color: var(--n6); }
+.cell[data-n='7'] { color: var(--n7); }
+.cell[data-n='8'] { color: var(--n8); }
+
+/* ── 換皮選擇器(選項面板) */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+
+.swatch-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 56px;
+  min-width: 68px;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--ink);
+  background: var(--face);
+  border: 3px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  cursor: pointer;
+}
+
+.swatch-btn[aria-pressed='true'] {
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+  font-weight: 700;
+}
+
+.swatch-chips {
+  display: flex;
+  border: 1px solid #555;
+}
+
+.swatch-chips i {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.backdrop-btn {
+  min-height: 52px;
+  min-width: 68px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 11.5px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  border: 3px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  cursor: pointer;
+}
+
+.backdrop-btn[aria-pressed='true'] {
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+  font-weight: 700;
+}
 
 /* ── 狀態列 */
 .statusbar {
@@ -395,6 +460,7 @@ body {
   padding: 0 12px;
   font: inherit;
   font-size: 14px;
+  color: var(--ink);
   background: var(--face);
   border: 3px solid;
   border-color: var(--light) var(--shadow) var(--shadow) var(--light);
@@ -475,7 +541,7 @@ body {
 
 .dialog .hint {
   font-size: 12px;
-  color: #444;
+  color: var(--ink-dim);
   margin: 2px 0 0 26px;
 }
 
@@ -485,6 +551,7 @@ body {
   padding: 0 14px;
   font: inherit;
   font-size: 13px;
+  color: var(--ink);
   background: var(--face);
   border: 3px solid;
   border-color: var(--light) var(--shadow) var(--shadow) var(--light);
@@ -516,8 +583,12 @@ body {
   text-align: left;
 }
 
+/* 表頭不換底色 —— 換底色就要為每個主題再維護一組「表頭底/表頭字」,
+   用粗體加底線既安全又在每個皮上都讀得到。 */
 .records-table th {
-  background: #b4b4b4;
+  background: transparent;
+  font-weight: 700;
+  border-bottom: 2px solid var(--ink);
 }
 
 .generating {
@@ -525,7 +596,8 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(192, 192, 192, 0.85);
+  background: var(--face);
+  color: var(--ink);
   font-size: 13px;
   z-index: 10;
 }

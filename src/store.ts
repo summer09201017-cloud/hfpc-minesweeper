@@ -28,6 +28,8 @@ import {
 } from './game/daily';
 import { type RecordBook, loadRecords, recordKey, submitGame } from './game/records';
 import { sfx } from './audio/sfx';
+import { bgm, DEFAULT_TRACK, findTrack } from './audio/bgm';
+import { DEFAULT_BACKDROP, DEFAULT_THEME, applyTheme, findBackdrop, findTheme } from './theme';
 
 const SETTINGS_KEY = 'ms.settings.v1';
 
@@ -44,6 +46,13 @@ export interface Settings {
   flagMode: boolean;
   /** 格子邊長 px;0 = 自動依畫面寬度算 */
   cellSize: number;
+  /** 換皮:視窗面、斜角、標題列、數字八色 */
+  theme: string;
+  /** 換背景:視窗後面那片桌面(可獨立於主題) */
+  backdrop: string;
+  /** 背景音樂開關(和音效分開:有人要音效不要音樂) */
+  music: boolean;
+  musicTrack: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -54,7 +63,12 @@ const DEFAULT_SETTINGS: Settings = {
   marks: false,
   sound: true,
   flagMode: false,
-  cellSize: 0
+  cellSize: 0,
+  theme: DEFAULT_THEME,
+  backdrop: DEFAULT_BACKDROP,
+  // 音樂預設關:別人家的孩子在圖書館/教室打開,不該突然出聲
+  music: false,
+  musicTrack: DEFAULT_TRACK
 };
 
 function loadSettings(): Settings {
@@ -65,7 +79,11 @@ function loadSettings(): Settings {
     return {
       ...DEFAULT_SETTINGS,
       ...o,
-      custom: clampSpec({ ...DEFAULT_SETTINGS.custom, ...(o.custom ?? {}) })
+      custom: clampSpec({ ...DEFAULT_SETTINGS.custom, ...(o.custom ?? {}) }),
+      // 舊存檔可能沒有這些鍵,或存了已經被刪掉的主題 id ⇒ 一律過一次「找不到就回預設」
+      theme: findTheme(String(o.theme ?? DEFAULT_THEME)).id,
+      backdrop: findBackdrop(String(o.backdrop ?? DEFAULT_BACKDROP)).id,
+      musicTrack: findTrack(String(o.musicTrack ?? DEFAULT_TRACK)).id
     };
   } catch {
     // localStorage 不可用(Safari 私密模式)或 JSON 壞掉 ⇒ 用預設值,不可以因此開不起來
@@ -85,7 +103,11 @@ function saveSettings(s: Settings): void {
         marks: s.marks,
         sound: s.sound,
         flagMode: s.flagMode,
-        cellSize: s.cellSize
+        cellSize: s.cellSize,
+        theme: s.theme,
+        backdrop: s.backdrop,
+        music: s.music,
+        musicTrack: s.musicTrack
       })
     );
   } catch {
@@ -269,10 +291,23 @@ export const useGame = create<GameStore>((set, get) => ({
       marks: p.marks ?? s.marks,
       sound: p.sound ?? s.sound,
       flagMode: p.flagMode ?? s.flagMode,
-      cellSize: p.cellSize ?? s.cellSize
+      cellSize: p.cellSize ?? s.cellSize,
+      theme: p.theme ?? s.theme,
+      backdrop: p.backdrop ?? s.backdrop,
+      music: p.music ?? s.music,
+      musicTrack: p.musicTrack ?? s.musicTrack
     };
     saveSettings(next);
     set(next);
+
+    if (p.theme !== undefined || p.backdrop !== undefined) {
+      applyTheme(next.theme, next.backdrop);
+    }
+    // 音樂:開關或換曲都走同一條路,狀態只有一個來源
+    if (p.music !== undefined || p.musicTrack !== undefined) {
+      if (next.music) bgm.play(next.musicTrack);
+      else bgm.stop();
+    }
     // 改到會影響盤面生成的設定 ⇒ 重開一局,免得「設定說無猜、手上這盤不是」
     if (p.noGuess !== undefined || p.firstClickRule !== undefined) get().newGame();
   },

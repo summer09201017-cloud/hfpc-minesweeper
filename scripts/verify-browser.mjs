@@ -234,6 +234,145 @@ async function run() {
   await page.waitForTimeout(150);
   check('改版簡歷關得掉', await page.locator('#appVerSheet').isHidden());
 
+  // ⑧.5 換皮 / 換背景 / 背景音樂
+  await reset(page);
+  await openMenu(page, '遊戲');
+  await page.locator('.menu-item', { hasText: '選項' }).first().click();
+  await page.waitForSelector('.dialog');
+
+  const themeCount = await page.locator('.swatch-btn').count();
+  check('選項裡有換皮清單(至少 5 種)', themeCount >= 5, `${themeCount} 種`);
+  const backdropCount = await page.locator('.backdrop-btn').count();
+  check('選項裡有換背景清單(至少 5 種)', backdropCount >= 5, `${backdropCount} 種`);
+
+  const readVars = () =>
+    page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      return {
+        face: cs.getPropertyValue('--face').trim(),
+        n1: cs.getPropertyValue('--n1').trim(),
+        desk: cs.getPropertyValue('--desk-bg').trim(),
+        theme: document.documentElement.dataset.theme,
+        backdrop: document.documentElement.dataset.backdrop
+      };
+    });
+
+  const beforeTheme = await readVars();
+  check('開場是經典 XP 皮', beforeTheme.theme === 'xp', beforeTheme.theme);
+  check('XP 皮的數字 1 是原版藍', beforeTheme.n1.toLowerCase() === '#0000ff', beforeTheme.n1);
+
+  await page.locator('.swatch-btn', { hasText: '夜間深色' }).first().click();
+  await page.waitForTimeout(250);
+  const darkVars = await readVars();
+  check('換成夜間深色,面色真的變了', darkVars.face !== beforeTheme.face, `${beforeTheme.face} → ${darkVars.face}`);
+  check(
+    '★ 換皮有把數字色一起換掉(只換底色的話深色皮上的 1 會看不見)',
+    darkVars.n1 !== beforeTheme.n1,
+    `n1 還是 ${darkVars.n1}`
+  );
+
+  // 真的量畫面上那顆數字的顏色,不是只看變數 —— 變數對了但 CSS 沒接上也會是這個症狀
+  await page.locator('.dialog-actions .btn', { hasText: '關閉' }).click();
+  await page.waitForTimeout(200);
+  await cellAt(page, 40).click();
+  await page.waitForTimeout(500);
+  const drawnColor = await page.evaluate(() => {
+    const el = document.querySelector('.cell[data-n="1"]');
+    return el ? getComputedStyle(el).color : null;
+  });
+  check(
+    '畫面上真的畫出深色皮的數字色(不是變數對了但 CSS 沒接上)',
+    drawnColor !== null && drawnColor !== 'rgb(0, 0, 255)',
+    String(drawnColor)
+  );
+
+  // ★ 深色皮上的「畫面文字」要真的看得見。
+  //   由來:深色皮做好、單元測試全綠、截圖一看 —— 選單「遊戲/說明」與狀態列還是黑字,
+  //   因為 CSS 有七處寫死 #000/#444。變數對了但 CSS 沒接上就是長這樣,
+  //   只有量 computed color 抓得到。
+  const inkContrast = await page.evaluate(() => {
+    const lin = (c) => {
+      const x = c / 255;
+      return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    };
+    const lum = (rgb) => {
+      const m = rgb.match(/\d+/g).map(Number);
+      return 0.2126 * lin(m[0]) + 0.7152 * lin(m[1]) + 0.0722 * lin(m[2]);
+    };
+    const bgOf = (el) => {
+      let e = el;
+      while (e) {
+        const b = getComputedStyle(e).backgroundColor;
+        if (b && !/rgba\(0, 0, 0, 0\)|transparent/.test(b)) return b;
+        e = e.parentElement;
+      }
+      return 'rgb(255,255,255)';
+    };
+    const out = [];
+    for (const sel of ['.menubar button', '.statusbar', '.mobile-bar button']) {
+      const el = document.querySelector(sel);
+      if (!el) {
+        out.push([sel, -1]);
+        continue;
+      }
+      const la = lum(getComputedStyle(el).color);
+      const lb = lum(bgOf(el));
+      const hi = Math.max(la, lb);
+      const lo = Math.min(la, lb);
+      out.push([sel, (hi + 0.05) / (lo + 0.05)]);
+    }
+    return out;
+  });
+  for (const [sel, ratio] of inkContrast) {
+    check(`深色皮上「${sel}」的文字讀得到(≥4.5:1)`, ratio >= 4.5, `量到 ${ratio.toFixed(2)}:1`);
+  }
+
+  // 換背景:獨立於主題
+  await openMenu(page, '遊戲');
+  await page.locator('.menu-item', { hasText: '選項' }).first().click();
+  await page.waitForSelector('.dialog');
+  await page.locator('.backdrop-btn', { hasText: '夜空' }).first().click();
+  await page.waitForTimeout(250);
+  const bd = await readVars();
+  check('換背景會蓋過主題的桌面色', bd.backdrop === 'night' && bd.desk !== darkVars.desk, bd.desk);
+  check('換背景不會動到棋盤主題', bd.theme === 'dark' && bd.face === darkVars.face);
+
+  // 背景音樂:預設關(別人家的孩子在教室打開不該突然出聲)
+  const musicBox = page.locator('.dialog label', { hasText: '播放背景音樂' }).locator('input');
+  check('背景音樂預設是關的', (await musicBox.isChecked()) === false);
+  await musicBox.check();
+  await page.waitForTimeout(250);
+  const trackBtns = await page.locator('.dialog .row .btn').count();
+  check('打開音樂後看得到曲目可選', trackBtns >= 3, `${trackBtns} 顆`);
+  await page.locator('.dialog-actions .btn', { hasText: '關閉' }).click();
+  await page.waitForTimeout(200);
+
+  // 設定要活得過重新整理
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.board .cell');
+  const after = await readVars();
+  check('重新整理後主題還在', after.theme === 'dark', after.theme);
+  check('重新整理後背景還在', after.backdrop === 'night', after.backdrop);
+  const musicPersisted = await page.evaluate(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ms.settings.v1') || '{}').music === true;
+    } catch {
+      return false;
+    }
+  });
+  check('重新整理後音樂設定還在', musicPersisted);
+  await shot(page, 'theme-dark-night');
+
+  // 高對比主題(投影上課用)
+  await reset(page, { theme: 'contrast' });
+  const hc = await page.evaluate(() => {
+    const cs = getComputedStyle(document.documentElement);
+    return { face: cs.getPropertyValue('--face').trim(), theme: document.documentElement.dataset.theme };
+  });
+  check('高對比主題套得起來', hc.theme === 'contrast' && hc.face.toLowerCase() === '#ffffff', JSON.stringify(hc));
+  await shot(page, 'theme-contrast');
+  await reset(page);
+
   // ⑨ 艦隊必備件
   check('有「← 大廳」鈕', (await page.locator('.topbar-btn', { hasText: '大廳' }).count()) === 1);
   const lobbyBox = await page.locator('.topbar-btn', { hasText: '大廳' }).boundingBox();

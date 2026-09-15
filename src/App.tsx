@@ -6,6 +6,7 @@ import { CustomDialog, HelpDialog, OptionsDialog, RecordsDialog } from './compon
 import { FaceIcon, MineIcon, SevenSeg } from './components/Glyphs';
 import { challengeLabel } from './game/daily';
 import { unlockAudio } from './audio/sfx';
+import { bgm } from './audio/bgm';
 import { efficiency, formatPercent } from './game/metrics';
 
 const LOBBY_URL = 'https://hfpc-bible-games.summer09201017.workers.dev/';
@@ -139,8 +140,16 @@ export default function App(): JSX.Element {
   const wideBoard = board.width >= 24;
   const eff = lastResult ? lastResult.efficiency : efficiency(bbbv, clicks);
 
+  // 音訊要等第一個使用者手勢才解得開(瀏覽器自動播放政策)。
+  // ★ 音樂不能在這裡無條件 play():使用者關掉音樂之後,每點一下畫面都會把它打開。
+  const startAudio = useCallback(() => {
+    unlockAudio();
+    const { music, musicTrack } = useGame.getState();
+    if (music && !bgm.isPlaying()) bgm.play(musicTrack);
+  }, []);
+
   return (
-    <div onPointerDownCapture={unlockAudio} onKeyDownCapture={unlockAudio}>
+    <div onPointerDownCapture={startAudio} onKeyDownCapture={startAudio}>
       <div className="topbar">
         <button type="button" className="topbar-btn" onClick={backToLobby} title="返回大廳">
           ← 大廳
