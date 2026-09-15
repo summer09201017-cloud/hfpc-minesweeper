@@ -1,0 +1,554 @@
+/* ───────────────────────────────────────────────────────────
+   WinXP 踩地雷外觀。
+   顏色與斜角都照 winmine.exe:面 #c0c0c0、亮邊白、暗邊 #808080。
+   ─────────────────────────────────────────────────────────── */
+
+:root {
+  --face: #c0c0c0;
+  --light: #ffffff;
+  --shadow: #808080;
+  --ink: #000000;
+  --cell: 26px;
+  --bevel: max(2px, calc(var(--cell) / 9));
+  --seg-bg: #000000;
+  --seg-on: #ff0000;
+  --seg-off: #3b0000;
+  --desk-1: #4a8ad4;
+  --desk-2: #23528f;
+  --title-1: #0a5bd3;
+  --title-2: #3f8ef5;
+}
+
+/* 深色版:只換底色與視窗外圍,棋盤本體維持經典灰(數字配色是招牌,不可以動) */
+:root[data-theme='dark'] {
+  --desk-1: #1b2330;
+  --desk-2: #0c1016;
+  --title-1: #263243;
+  --title-2: #3b4a60;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  /* 📏 三層退路:100vh → 100dvh → var(--app-h)(index.html 量的真實可視高度) */
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: var(--app-h, 100vh);
+  background: linear-gradient(160deg, var(--desk-1), var(--desk-2));
+  font-family: 'Segoe UI', 'Noto Sans TC', system-ui, sans-serif;
+  color: #000;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: var(--app-h, 100vh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 40px;
+}
+
+/* ── 艦隊標題列:← 大廳 / ⛶ 全螢幕(觸控目標下限 40px) */
+.topbar {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.topbar-btn {
+  min-height: 40px;
+  min-width: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.topbar-btn:active {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.topbar-title {
+  color: #fff;
+  font-size: 14px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── XP 視窗 */
+.window {
+  background: var(--face);
+  border: 3px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  max-width: 100%;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  background: linear-gradient(180deg, var(--title-2), var(--title-1));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.titlebar img,
+.titlebar svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.titlebar-text {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menubar {
+  display: flex;
+  gap: 2px;
+  padding: 2px 3px;
+  background: var(--face);
+  border-bottom: 1px solid #9a9a9a;
+  position: relative;
+}
+
+.menubar button {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  min-height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #000;
+  cursor: pointer;
+}
+
+.menubar button:hover,
+.menubar button[aria-expanded='true'] {
+  background: #000080;
+  color: #fff;
+}
+
+.menu-popup {
+  position: absolute;
+  top: 100%;
+  left: 3px;
+  z-index: 40;
+  min-width: 226px;
+  background: var(--face);
+  border: 2px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.4);
+  padding: 2px;
+}
+
+.menu-popup[data-align='right'] {
+  left: auto;
+  right: 3px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 7px 10px;
+  min-height: 36px;
+  background: transparent;
+  border: 0;
+  color: #000;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: #000080;
+  color: #fff;
+}
+
+.menu-item .check {
+  width: 14px;
+  flex: 0 0 auto;
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 3px 2px;
+  background: var(--shadow);
+  border-bottom: 1px solid var(--light);
+}
+
+/* ── 遊戲區:外框凹陷,裡面是面板 + 棋盤 */
+.game-outer {
+  padding: 6px;
+  background: var(--face);
+}
+
+.panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 6px;
+  margin-bottom: 6px;
+  border: 2px solid;
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+}
+
+.face-btn {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  flex: 0 0 auto;
+  background: var(--face);
+  border: 3px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.face-btn:active,
+.face-btn[data-pressed='true'] {
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+}
+
+.face-btn svg {
+  width: 30px;
+  height: 30px;
+  display: block;
+}
+
+/* ── 七段顯示器 */
+.seg {
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  background: var(--seg-bg);
+  border: 2px solid;
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+  flex: 0 0 auto;
+}
+
+.seg svg {
+  display: block;
+  width: 17px;
+  height: 30px;
+}
+
+/* ── 棋盤 */
+.board-scroll {
+  /* 寬度貼合格子 —— 撐滿視窗的話,棋盤右邊會露出一塊沒有格子的灰色空地,
+     看起來像沒做完。量可用寬度的責任因此交給外層 .game-outer(見 BoardView)。 */
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 3px solid;
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+}
+
+.board {
+  /* 格子大小 = (可用寬度 − 外框合計) ÷ 欄數,夾在 22~34px。
+     ★ 用 CSS 算而不是用 JS 量容器:.window / .game-outer 的寬度是「內容撐出來的」,
+       量它們等於量棋盤自己 ⇒ 每量一次就縮一點,自己追自己,而且第一幀會先寬出畫面。
+     ★ 22px 是觸控下限 —— 寧可左右捲動,也不要小到點不中。
+     --board-chrome = #root 內距 16 + 視窗框 6 + game-outer 內距 12 + 凹陷框 6 */
+  --board-chrome: 40px;
+  --cell: clamp(22px, calc((var(--app-w, 100vw) - var(--board-chrome)) / var(--cols)), 34px);
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  background: var(--face);
+  width: max-content;
+  /* 長按插旗時不要跳出系統選單、不要選取文字 */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.cell {
+  width: var(--cell);
+  height: var(--cell);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: calc(var(--cell) * 0.62);
+  line-height: 1;
+  font-family: 'Tahoma', 'Noto Sans TC', sans-serif;
+  background: var(--face);
+  border: var(--bevel) solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  cursor: pointer;
+}
+
+/* XP 的已開格子和未開格子是**同一個灰**,差別只在少了斜角、多了細格線。
+   調亮會讓已開區看起來像另一種材質,和原版不一樣。 */
+.cell[data-state='revealed'] {
+  border: 1px solid var(--shadow);
+  border-width: 1px 0 0 1px;
+  background: var(--face);
+  cursor: default;
+}
+
+.cell[data-hit='true'] {
+  background: #ff0000;
+}
+
+.cell[data-wrong='true'] {
+  background: #c6c6c6;
+}
+
+.cell svg {
+  width: 82%;
+  height: 82%;
+  display: block;
+}
+
+/* XP 的數字配色,一個都不能換 —— 這是老玩家的肌肉記憶 */
+.cell[data-n='1'] { color: #0000ff; }
+.cell[data-n='2'] { color: #008000; }
+.cell[data-n='3'] { color: #ff0000; }
+.cell[data-n='4'] { color: #000080; }
+.cell[data-n='5'] { color: #800000; }
+.cell[data-n='6'] { color: #008080; }
+.cell[data-n='7'] { color: #000000; }
+.cell[data-n='8'] { color: #808080; }
+
+/* ── 狀態列 */
+.statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 5px 7px;
+  font-size: 12px;
+  border-top: 1px solid var(--light);
+  background: var(--face);
+  min-height: 28px;
+}
+
+.statusbar b {
+  font-weight: 700;
+}
+
+.badge-guess {
+  padding: 1px 6px;
+  border: 1px solid #806000;
+  background: #ffe9a8;
+  color: #6b4d00;
+}
+
+.badge-noguess {
+  padding: 1px 6px;
+  border: 1px solid #206020;
+  background: #d6f5d6;
+  color: #17521a;
+}
+
+/* ── 手機控制列 */
+.mobile-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 0 0;
+}
+
+.mobile-bar button {
+  min-height: 44px;
+  min-width: 52px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  background: var(--face);
+  border: 3px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  cursor: pointer;
+}
+
+.mobile-bar button[aria-pressed='true'] {
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+  background: #b0b0b0;
+}
+
+/* ── 對話框 */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 400px;
+  max-height: 86vh;
+  max-height: calc(var(--app-h, 100vh) - 32px);
+  overflow: auto;
+  background: var(--face);
+  border: 3px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.dialog-body {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.dialog h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.dialog .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.dialog label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.dialog input[type='number'] {
+  width: 76px;
+  min-height: 34px;
+  font: inherit;
+  padding: 2px 6px;
+  border: 2px solid;
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+}
+
+.dialog input[type='checkbox'],
+.dialog input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.dialog .hint {
+  font-size: 12px;
+  color: #444;
+  margin: 2px 0 0 26px;
+}
+
+.btn {
+  min-height: 40px;
+  min-width: 84px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--face);
+  border: 3px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  cursor: pointer;
+}
+
+.btn:active {
+  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 0 14px 14px;
+  flex-wrap: wrap;
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.records-table th,
+.records-table td {
+  border: 1px solid var(--shadow);
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.records-table th {
+  background: #b4b4b4;
+}
+
+.generating {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(192, 192, 192, 0.85);
+  font-size: 13px;
+  z-index: 10;
+}
+
+.board-wrap {
+  position: relative;
+}
+
+/* 直向玩高級盤時的提示 */
+.rotate-hint {
+  width: 100%;
+  max-width: 980px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

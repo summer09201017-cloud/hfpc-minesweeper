@@ -1,0 +1,103 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>踩地雷 Minesweeper（WinXP 原味復刻 + 無猜盤面）</title><style>
+:root{--bg:#fbfaf7;--fg:#23201c;--mut:#6b6459;--line:#e2ddd2;--card:#fff;--acc:#8a6d3b;--pre:#f4f1ea}
+@media(prefers-color-scheme:dark){:root{--bg:#1b1a18;--fg:#e9e5dd;--mut:#a09889;--line:#3a3733;--card:#222120;--acc:#d9b779;--pre:#26241f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.85 "Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;padding:32px 20px 80px}
+main{max-width:900px;margin:0 auto}
+h1{font-size:1.9rem;margin:.2em 0 .6em;border-bottom:3px solid var(--acc);padding-bottom:.3em}
+h2{font-size:1.45rem;margin:1.8em 0 .5em;border-bottom:1px solid var(--line);padding-bottom:.25em}
+h3{font-size:1.18rem;margin:1.4em 0 .4em;color:var(--acc)}
+h4,h5,h6{font-size:1.03rem;margin:1.1em 0 .3em}
+p{margin:.6em 0}ul,ol{margin:.5em 0;padding-left:1.6em}li{margin:.3em 0}
+blockquote{margin:.9em 0;padding:.7em 1em;border-left:4px solid var(--acc);background:var(--card);border-radius:0 6px 6px 0;color:var(--mut)}
+hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+code{background:var(--pre);padding:.12em .4em;border-radius:4px;font-size:.9em;
+font-family:"Cascadia Mono",Consolas,monospace;word-break:break-all}
+.cw{position:relative;margin:1em 0}
+.cw pre{background:var(--pre);border:1px solid var(--line);border-radius:8px;padding:16px;overflow-x:auto;margin:0}
+.cw pre code{background:none;padding:0;font-size:.88rem;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.cp{position:absolute;top:8px;right:8px;background:var(--acc);color:#fff;border:0;border-radius:6px;
+padding:6px 14px;font-size:.82rem;cursor:pointer;font-family:inherit;opacity:.85}
+.cp:hover{opacity:1}.cp.ok{background:#3f7d4f}
+.tw{overflow-x:auto;margin:1em 0}
+table{border-collapse:collapse;width:100%;font-size:.94rem}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}
+a{color:var(--acc)}
+.note{max-width:900px;margin:0 auto 24px;color:var(--mut);font-size:.85rem;border:1px dashed var(--line);
+padding:8px 12px;border-radius:6px}
+</style></head><body>
+<div class="note">這份 HTML 由同名 .md 自動產生(方便閱讀與複製)。內容以 .md 為準;程式碼區塊右上角可一鍵複製。</div>
+<main><h1>踩地雷 Minesweeper（WinXP 原味復刻 + 無猜盤面）</h1>
+<p>Vite + React + TypeScript 的踩地雷 PWA。桌機滑鼠三鍵全支援、手機長按插旗，可安裝到主畫面、離線可玩。</p>
+<h2>特色</h2>
+<h3>WinXP 原味</h3>
+<p>完全照 <code>winmine.exe</code> 的行為做，不是「長得像」而已：</p>
+<ul>
+<li><strong>三難度</strong>：初級 9×9/10 雷、中級 16×16/40 雷、高級 <strong>30 寬 × 16 高</strong>/99 雷（很多仿作抄成 16×30），另有自訂盤（最大 30×24）</li>
+<li><strong>和弦展開</strong>：左右鍵同按（或中鍵）——數字周圍的旗數剛好等於數字時，一次翻開其餘鄰格。<strong>旗插錯了會炸</strong>，這是它的代價，不幫玩家擋</li>
+<li><strong>問號標記</strong>：右鍵循環 旗 → ? → 空白，可在「遊戲 → 標記(?)」關掉</li>
+<li><strong>笑臉鈕</strong>：🙂 常態 / 😮 按著 / 😎 通關 / 😵 踩雷</li>
+<li><strong>七段顯示器</strong>：黑底紅字，左邊剩餘雷數（可以是負數）、右邊計時器（上限 999，第一次點擊才起跑）</li>
+<li><strong>數字配色</strong>：1 藍 2 綠 3 紅 4 深藍 5 褐 6 青 7 黑 8 灰，一個都沒換</li>
+<li><strong>踩雷畫面</strong>：踩到的那顆紅底、其餘雷全掀、插錯的旗畫紅叉</li>
+<li><strong>通關</strong>：非雷格全開後自動把剩下的雷插旗、剩餘雷數歸零</li>
+<li>圖示全部是 SVG 手繪，<strong>不用 emoji</strong>——地雷和旗子長什麼樣是這款的招牌，不能交給平台字型決定</li>
+</ul>
+<h3>無猜盤面（可關）</h3>
+<p>經典踩地雷會出現只能賭運氣的 50/50。打開「無猜盤面」之後：</p>
+<ol>
+<li>玩家按下第一格</li>
+<li>隨機佈雷（避開首點）</li>
+<li>讓推理引擎從首點自己玩一遍</li>
+<li>全開得了就採用，卡住就丟掉重抽</li>
+</ol>
+<p>盤面是在<strong>第一格按下去之後</strong>才生成的，所以生成器知道玩家從哪裡開始，能一直重抽到抽出一盤保證不用猜的為止。</p>
+<p>推理引擎（<code>src/game/solver.ts</code>）三層，由便宜到昂貴：</p>
+<div class="tw"><table><thead><tr><th>層</th><th>規則</th></tr></thead><tbody><tr><td>① 單格規則</td><td>數字周圍已知雷數滿了 ⇒ 其餘鄰格安全；數字等於未開鄰格數 ⇒ 全是雷</td></tr><tr><td>② 子集規則</td><td>A=1 管 {a,b}、B=2 管 {a,b,c}，雷數差 1 而多出來的只有 c ⇒ c 必是雷（1-2-1 直覺）</td></tr><tr><td>③ 窮舉 + 全域雷數</td><td>把邊界連通塊的所有合法擺法列出來，再用剩餘雷數做跨塊的可行性 DP；某格在每一種可行擺法裡都一樣 ⇒ 確定</td></tr></tbody></table></div>
+<p><strong>鐵則：只能少推，絕不能推錯。</strong> 第 ③ 層有節點上限，超限就放棄那個連通塊——放棄時把它的雷數範圍放寬成超集，讓全域推論仍然成立。寧可生不出無猜盤，也不可以生出「宣稱無猜、其實要賭」的盤。</p>
+<p>實測生成成本（<code>npm run bench</code>）：</p>
+<div class="tw"><table><thead><tr><th>難度</th><th>首點規則</th><th>成功率</th><th>平均</th><th>最慢</th></tr></thead><tbody><tr><td>初級 9×9/10</td><td>保證開一片</td><td>25/25</td><td>1ms / 1 次抽</td><td>4ms</td></tr><tr><td>中級 16×16/40</td><td>保證開一片</td><td>25/25</td><td>2ms / 1 次抽</td><td>8ms</td></tr><tr><td>高級 30×16/99</td><td>保證開一片</td><td>25/25</td><td>63ms / 8 次抽</td><td>320ms</td></tr><tr><td>高級 30×16/99</td><td>XP 原味</td><td>25/25</td><td>61ms / 29 次抽</td><td>294ms</td></tr></tbody></table></div>
+<p>預算 2500ms 內生不出來時，<strong>退回一般盤面並在狀態列誠實標成「⚠ 一般盤面：可能需要猜」</strong>。</p>
+<h3>首點保護（兩種，可選）</h3>
+<ul>
+<li><strong>現代友善</strong>（預設）：保證首點是零格，一點展開一整片。Win7 之後的官方版與手機 App 都這樣</li>
+<li><strong>XP 原味</strong>：只保證首點不是雷，可能一點就開出一個「5」</li>
+</ul>
+<h3>其他</h3>
+<ul>
+<li><strong>每日挑戰</strong>：<code>?daily</code> 是今天的題，<code>?seed=123456</code> 指定題號。因為踩地雷的盤面由「第一格點哪裡」決定，每日挑戰把<strong>第一格也交給種子</strong>，開局直接幫你點掉——全世界同一天拿到同一盤、同一個開場</li>
+<li><strong>個人紀錄</strong>：三難度各自記最佳時間、勝率、最佳 3BV/秒。<strong>無猜盤與一般盤分開記</strong>（無猜明顯好過，混在一起的話一般盤的紀錄永遠破不了）</li>
+<li><strong>3BV 與效率</strong>：3BV = 這一盤最少要點幾下；效率 = 3BV ÷ 實際左鍵次數（只在結算時顯示）</li>
+<li><strong>手機</strong>：點一下開格、長按插旗（會震一下）、在數字上點一下和弦展開，另有 🚩 旗子模式把兩者對調</li>
+<li><strong>PWA</strong>：可安裝、離線可玩</li>
+<li><strong>統計打點</strong>：<code>psPing</code> 開啟 + <code>-done</code> 完賽 + <code>-dwell</code> 真實停留，零個資（無 cookie、無 IP 存檔、無帳號）</li>
+</ul>
+<h2>開發</h2>
+<div class="cw"><button class="cp" type="button">複製</button><pre data-lang="bash"><code>npm install
+npm run dev        # 開發模式
+npm test           # 單元測試（引擎 + 推理引擎 + 生成器，41 項）
+npm run build      # 產出 dist/
+npm run preview    # 本機預覽 dist（port 4173）
+npm run verify     # 真瀏覽器行為驗收（需要 preview 先起來）
+npm run bench      # 無猜盤面生成成本實測</code></pre></div>
+<p>真瀏覽器驗收也可以打線上：</p>
+<div class="cw"><button class="cp" type="button">複製</button><pre data-lang="bash"><code>BASE=https://hfpc-minesweeper.summer09201017.workers.dev npm run verify
+SHOT_DIR=scripts/out/shots npm run verify      # 順便存截圖</code></pre></div>
+<h2>為什麼兩套測試都要</h2>
+<ul>
+<li><strong>單元測試</strong>證明「規則對」——和弦判定、零格連鎖、首點保護、推理引擎健全性（跑 300 個隨機盤，推出來的每一格都對照真實盤面驗一次）</li>
+<li><strong>真瀏覽器驗收</strong>證明「畫面上做得到」——測試全綠但一開頁就被遮罩蓋住、按鈕被固定徽章偷走觸控，這兩種錯只有真的去點才看得到</li>
+</ul>
+<h2>部署</h2>
+<div class="cw"><button class="cp" type="button">複製</button><pre data-lang="bash"><code>npm run deploy     # build + wrangler deploy --name hfpc-minesweeper --assets dist</code></pre></div></main>
+<script>
+document.querySelectorAll('.cp').forEach(function(b){b.addEventListener('click',function(){
+var t=b.parentElement.querySelector('code').innerText;
+function done(){b.textContent='已複製';b.classList.add('ok');setTimeout(function(){b.textContent='複製';b.classList.remove('ok')},1600)}
+function fallback(){var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();
+try{document.execCommand('copy');done()}catch(e){b.textContent='請手動選取'}a.remove()}
+if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,fallback)}else{fallback()}
+});});
+</script></body></html>

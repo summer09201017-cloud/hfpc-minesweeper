@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#c0c0c0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="踩地雷" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+    <title>踩地雷 Minesweeper</title>
+    <script>
+      // 📏 高度三層退路(0915 全艦隊掃描的結論,新站一開始就寫對):
+      //    100vh → 100dvh → var(--app-h)。iOS/LINE WebView 的網址列會吃掉高度,
+      //    只寫 100vh 會讓底部控制列被推到畫面外、使用者以為按鈕不見了。
+      (function () {
+        function setH() {
+          var vv = window.visualViewport;
+          var h = (vv && vv.height) || window.innerHeight;
+          var w = (vv && vv.width) || window.innerWidth;
+          document.documentElement.style.setProperty('--app-h', h + 'px');
+          // 寬度也量一份:棋盤的格子大小直接用 CSS 從它算出來(見 xp.css 的 --cell)。
+          // 用 JS 量容器會出事 —— 容器寬度本身跟著棋盤走,會變成自己追自己。
+          document.documentElement.style.setProperty('--app-w', w + 'px');
+        }
+        setH();
+        addEventListener('resize', setH);
+        addEventListener('orientationchange', setH);
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', setH);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+
+    <script>
+      // play-stats 三層匿名計數(skill play-stats-lite / play-stats-dwell)。
+      // 零個資:無 cookie、無 IP 存檔、無帳號;離線時靜默跳過,不影響遊戲。
+      // ⚠ 閘門用「黑名單」只擋本機開發 —— 絕不可寫成 hostname 白名單:
+      //    平台白名單=每次搬家都會靜靜斷流,而搬家的人不會想到回來改這一行。
+      window.psPing = function (key, t) {
+        try {
+          if (['localhost', '127.0.0.1', ''].includes(location.hostname)) return;
+          var u =
+            'https://hfpc-play-stats.summer09201017.workers.dev/api/ping?g=' +
+            key +
+            (t ? '&t=' + t : '');
+          if (navigator.sendBeacon) navigator.sendBeacon(u);
+          else fetch(u, { mode: 'no-cors' });
+        } catch (_) {}
+      };
+      // ① 開啟:10 分鐘內同一台裝置只算一次
+      try {
+        var psK = 'ps-last-minesweeper';
+        var psLast = parseInt(localStorage.getItem(psK) || '0', 10);
+        if (Date.now() - psLast > 600000) {
+          localStorage.setItem(psK, String(Date.now()));
+          window.psPing('minesweeper');
+        }
+      } catch (_) {
+        window.psPing('minesweeper');
+      }
+      // ② 真實停留:開頁 → 第一次離開回報一發 -dwell 帶秒數。
+      //    ★ 只送這一發:手機鎖屏時常只送得出佇列第一個 beacon,同一刻連發兩個會有一發被丟掉。
+      (function () {
+        var _dwT0 = Date.now(),
+          _dwSent = false;
+        function _dwLeave() {
+          if (_dwSent) return;
+          _dwSent = true;
+          var sec = Math.round((Date.now() - _dwT0) / 1000);
+          if (sec < 3 || sec > 1800) return; // 誤觸不算、掛整天的背景分頁也不算
+          window.psPing('minesweeper-dwell', sec);
+        }
+        addEventListener('pagehide', _dwLeave);
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'hidden') _dwLeave();
+        });
+      })();
+    </script>
+
+    <!-- 🏷 版號兩件套（game-must-haves 第七件）：徽章 + 點得開的改版簡歷。
+         ★ 版號和簡歷都在 APP_VERSIONS 這一處，徽章文字由程式帶出來。
+           寫死在徽章 innerText 的話，改版忘了改它就會默默漂移（畫面說 v1、程式已經是 v2）。
+         ★ 徽章是「標籤」不是「按鈕」：pointer-events:none 不可或缺。
+           0915 dragtetris 實測：改成可點之後它蓋住了下方按鈕的下緣，
+           拇指點下半部會跳出簡歷而不是操作遊戲（elementFromPoint 量出來的，截圖看不出來）。
+           ⇒ 簡歷改從「說明」選單開。 -->
+    <div
+      id="appVerBadge"
+      aria-hidden="true"
+      style="position:fixed;right:6px;bottom:4px;font-size:11px;line-height:1;opacity:.55;z-index:2147483000;pointer-events:none;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);font-family:system-ui,sans-serif"
+    ></div>
+    <style>
+      /* ★ hidden 屬性的 display:none 來自瀏覽器預設樣式表，inline style 會贏過它。
+         不寫這一行的話，這層全螢幕遮罩從一開頁就蓋在上面、吃掉所有點擊。
+         （0915 真瀏覽器驗收抓到；單元測試全綠也看不到這種錯。） */
+      #appVerSheet[hidden] {
+        display: none !important;
+      }
+    </style>
+    <div
+      id="appVerSheet"
+      hidden
+      style="position:fixed;inset:0;z-index:2147483001;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,'Noto Sans TC',sans-serif"
+    >
+      <div
+        style="max-width:420px;width:100%;max-height:70vh;overflow:auto;background:#c0c0c0;border:3px outset #fff;padding:14px 16px;color:#000"
+      >
+        <h3 style="margin:0 0 8px;font-size:15px">改版簡歷</h3>
+        <ol id="appVerList" style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.75"></ol>
+        <button
+          type="button"
+          id="appVerClose"
+          style="margin-top:12px;width:100%;min-height:40px;font:inherit;color:#000;background:#c0c0c0;border:3px outset #fff;cursor:pointer"
+        >
+          關閉
+        </button>
+      </div>
+    </div>
+    <script>
+      (function () {
+        // 最新的放最前面。改版只要在這裡插一筆，徽章會自己跟上。
+        var APP_VERSIONS = [
+          {
+            v: 'v1',
+            d: '2026-09-16',
+            t: 'WinXP 原味復刻（三難度＋自訂、和弦展開、問號標記、笑臉鈕、七段顯示器）、無猜盤面生成器、首點保護可選、每日挑戰 ?daily / ?seed、三難度個人紀錄與 3BV 效率、手機長按插旗與旗子模式'
+          }
+        ];
+        var badge = document.getElementById('appVerBadge');
+        var sheet = document.getElementById('appVerSheet');
+        var list = document.getElementById('appVerList');
+        var close = document.getElementById('appVerClose');
+        if (!badge || !sheet || !list || !close) return;
+
+        var latest = APP_VERSIONS[0];
+        badge.textContent = '🏷️ 版本 ' + latest.v + '（' + latest.d + '）';
+        list.innerHTML = APP_VERSIONS.map(function (r) {
+          var esc = function (x) {
+            return String(x).replace(/[&<>]/g, function (c) {
+              return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+            });
+          };
+          return '<li><b>' + esc(r.v) + '</b>（' + esc(r.d) + '）：' + esc(r.t) + '</li>';
+        }).join('');
+
+        function open() {
+          sheet.hidden = false;
+        }
+        function shut() {
+          sheet.hidden = true;
+        }
+        window.__openVersionSheet = open;
+        window.__appVersion = latest.v + '（' + latest.d + '）';
+        close.addEventListener('click', shut);
+        sheet.addEventListener('click', function (e) {
+          if (e.target === sheet) shut();
+        });
+        addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && !sheet.hidden) shut();
+        });
+
+        badge.style.transition = 'opacity .8s';
+        setTimeout(function () {
+          badge.style.opacity = '.2';
+        }, 10000);
+      })();
+    </script>
+  </body>
+</html>
