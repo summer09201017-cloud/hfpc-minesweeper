@@ -10,8 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify": "node scripts/verify-browser.mjs",
-    "deploy": "npm run build && wrangler deploy --name hfpc-minesweeper --assets dist",
-    "bench": "node scripts/bench-gen.mjs"
+    "deploy": "npm run build && wrangler deploy",
+    "bench": "node scripts/bench-gen.mjs",
+    "check:offline": "node scripts/check-offline.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

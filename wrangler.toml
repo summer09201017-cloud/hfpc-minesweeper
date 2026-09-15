@@ -1,0 +1,11 @@
+# Cloudflare Workers 靜態資產部署。
+# ★ 寫成設定檔而不是只用命令列旗標:下一個人(或下一台機)打 `npm run deploy`
+#   就會得到一模一樣的結果,不必記得要補哪些參數。
+# ★ 0907 起 CF 只擋「建新 Pages 專案」,新 Worker 名可以建 ⇒ 新站一律走 Workers。
+name = "hfpc-minesweeper"
+compatibility_date = "2026-09-15"
+
+[assets]
+directory = "dist"
+# 這是 PWA,找不到的路徑一律回 index.html(和 vite-plugin-pwa 的 navigateFallback 一致)
+not_found_handling = "single-page-application"
