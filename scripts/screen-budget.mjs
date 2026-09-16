@@ -10,8 +10,12 @@
  *       ③ 整頁要捲幾個螢幕才看得完
  *
  * 用法:
- *   node scripts/screen-budget.mjs <url> [--sel .board] [--portrait] [--landscape]
- *   node scripts/screen-budget.mjs <url> --sel canvas --json
+ *   node scripts/screen-budget.mjs <url> [--sel=canvas,.board] [--json]
+ *   node scripts/screen-budget.mjs <url> --press="全螢幕鈕的選擇器"   ← 量「按了之後有沒有變」
+ *
+ * ★★ 稽核最該問的就是 --press 這一問:**「有沒有 ⛶ 鈕」不是判準** ——
+ *   踩地雷就有鈕,按下去卻只收掉瀏覽器那條網址列(56px),自己的殼 286px 一格沒少。
+ *   判準是「按之前 vs 按之後」這兩組數字有沒有真的變。
  *
  * 判讀(0916 實測出來的經驗值):
  *   🟢 主畫面 ≥ 55% 面積、整頁 ≤ 1.05 個螢幕
@@ -35,6 +39,8 @@ const VIEWPORTS = [
   ['橫向 844×390', { width: 844, height: 390 }]
 ];
 
+const pressSel = (args.find((a) => a.startsWith('--press=')) || '').split('=').slice(1).join('=');
+
 const browser = await chromium.launch();
 const rows = [];
 
@@ -44,10 +50,10 @@ for (const [name, viewport] of VIEWPORTS) {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2500); // 給開場動畫/自動生成盤面一點時間
-    const m = await page.evaluate((selectors) => {
+    const measure = (selectors) => page.evaluate((sels) => {
       // 主畫面 = 選擇器裡「面積最大」的那個元素(canvas 站與 DOM 棋盤站都吃得下)
       let best = null;
-      for (const s of selectors.split(',')) {
+      for (const s of sels.split(',')) {
         for (const el of document.querySelectorAll(s.trim())) {
           const r = el.getBoundingClientRect();
           if (!best || r.width * r.height > best.w * best.h) {
@@ -74,7 +80,20 @@ for (const [name, viewport] of VIEWPORTS) {
           })
           .slice(0, 5)
       };
-    }, sel);
+    }, selectors);
+
+    const m = await measure(sel);
+    let after = null;
+    if (pressSel) {
+      try {
+        await page.locator(pressSel).first().click({ timeout: 4000 });
+      } catch {
+        // 點不到就用 DOM 直接按:量的是「按下去會不會變」,不是按鈕好不好按
+        await page.evaluate((q) => document.querySelector(q)?.click(), pressSel);
+      }
+      await page.waitForTimeout(600);
+      after = await measure(sel);
+    }
 
     const stageArea = m.stage ? (m.stage.w * m.stage.h) / (m.vw * m.vh) : 0;
     // 殼 = 整頁高扣掉主畫面(**不是**視窗高扣掉主畫面)——
@@ -82,7 +101,21 @@ for (const [name, viewport] of VIEWPORTS) {
     const chromeH = m.stage ? Math.max(0, m.pageH - m.stage.h) : m.vh;
     const screens = m.pageH / m.vh;
     const light = stageArea >= 0.55 && screens <= 1.05 ? '🟢' : stageArea >= 0.35 && screens <= 1.2 ? '🟡' : '🔴';
-    rows.push({ url, viewport: name, light, stageArea: +(stageArea * 100).toFixed(1), chromePct: +((chromeH / m.vh) * 100).toFixed(0), screens: +screens.toFixed(2), stage: m.stage, fixedBars: m.fixedBars });
+    const row = { url, viewport: name, light, stageArea: +(stageArea * 100).toFixed(1), chromePct: +((chromeH / m.vh) * 100).toFixed(0), screens: +screens.toFixed(2), stage: m.stage, fixedBars: m.fixedBars };
+    if (after) {
+      const aArea = after.stage ? (after.stage.w * after.stage.h) / (after.vw * after.vh) : 0;
+      row.after = {
+        stageArea: +(aArea * 100).toFixed(1),
+        screens: +(after.pageH / after.vh).toFixed(2),
+        stage: after.stage
+      };
+      // 面積沒多 10%、捲動也沒少 0.1 個螢幕 ⇒ 那顆鈕等於沒有用
+      row.pressHelps = aArea - stageArea > 0.1 || row.screens - row.after.screens > 0.1;
+      // ★ 但「按之前就已經不用捲」時,按了沒變是**合理的**(主畫面本來就吃滿了)——
+      //   少了這一條,會把做對的站也判成紅燈。
+      row.pressNeeded = screens > 1.05 || stageArea < 0.35;
+    }
+    rows.push(row);
   } catch (e) {
     rows.push({ url, viewport: name, light: '⚠', error: String(e).slice(0, 80) });
   }
@@ -103,5 +136,16 @@ if (asJson) {
         `(${r.stage.w}×${r.stage.h})  殼佔高 ${String(r.chromePct).padStart(3)}%  整頁 ${r.screens} 個螢幕` +
         (r.fixedBars.length ? `  固定列:${r.fixedBars.map((b) => `${b.cls || b.tag}(${b.h}px)`).join(' ')}` : '')
     );
+    if (r.after) {
+      const verdict = !r.pressNeeded
+        ? 'ℹ️ 按之前就不用捲了(沒變是合理的)'
+        : r.pressHelps
+          ? '✅ 按了真的有變'
+          : '❌ 按了等於沒按 —— 只收掉瀏覽器那條網址列,自己的殼一格沒少';
+      console.log(
+        `   ${verdict}:主畫面 ${r.stageArea}% → ${r.after.stageArea}%` +
+          `(${r.after.stage.w}×${r.after.stage.h})  整頁 ${r.screens} → ${r.after.screens} 個螢幕`
+      );
+    }
   }
 }
