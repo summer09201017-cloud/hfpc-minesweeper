@@ -1,0 +1,129 @@
+============================================================
+踩地雷 Minesweeper — 交接說明(讀我-HANDOFF.txt)
+更新:2026-09-16 晚(agape250 機・Opus 5・0916-hfpc-minesweeper 場)
+============================================================
+
+★ 這份是寫給「另一台 PC 的 AI」的。規矩看 CLAUDE.md,玩法看 README.md,待做看 roadmap.md。
+
+
+■ 這是什麼
+------------------------------------------------------------
+WinXP 原味踩地雷 PWA(Vite + React + TypeScript)。純經典休閒,**刻意不做聖經皮**
+(0916 使用者拍板),收在大廳的「經典街機合輯」。
+
+線上:https://hfpc-minesweeper.summer09201017.workers.dev
+平台:Cloudflare **Workers**(不是 Pages)。`npm run deploy` = build + `wrangler deploy`,
+      參數寫在 repo 的 wrangler.toml,不必記。
+GitHub:summer09201017-cloud/hfpc-minesweeper(branch master)
+
+
+■ 現在到哪(2026-09-16 晚,v6)
+------------------------------------------------------------
+一天之內 v1 → v6,全部已上線並線上驗過:
+
+  v1 WinXP 原味復刻 + 無猜盤面 solver
+  v2 換皮 7 / 換背景 7 / 三首原創零音檔 BGM
+  v3 背景升級成零美術檔的向量場景畫(8 張)
+  v4 教練層:提示 / 悔一步 / 全鍵盤 / 死因分析 / 教學回放 + 放棄率統計
+  v5 裝到手機主畫面:PNG 圖示 + 站內安裝入口(三種平台三種說法)
+  v6 ⛶ 沉浸模式 + 手機版面用算的
+
+驗收(本機與線上各跑過一輪):
+  單元      146 通過 / 0 失敗(9 個測試檔)
+  真瀏覽器  119 通過 / 0 失敗(scripts/verify-browser.mjs)
+  離線      7 通過 / 0 失敗(scripts/check-offline.mjs)
+
+git 實況(打包前逐項問過 git,不是憑印象):
+  工作區乾淨(git status --short 空)
+  未推 commit 數 = 0(git rev-list --count @{u}..HEAD)
+  HEAD = 018cfa9「量尺加第 ④ 個數字」
+  線上 APP_VERSIONS 最新 = v6 ✓(curl 帶 ?bust= 驗過)
+
+
+■ 怎麼跑
+------------------------------------------------------------
+  npm install
+  npm test                # 單元 146
+  npm run build           # prebuild 會先清 dist(見下面地雷)
+  npm run preview         # port 4173
+  npm run verify          # 真瀏覽器 119(預設 localhost:4173)
+  BASE=https://hfpc-minesweeper.summer09201017.workers.dev npm run verify   # 打線上
+  SHOT_DIR=scripts/out/shots npm run verify   # 順便存截圖
+  npm run check:offline   # 斷網後還能不能玩
+  npm run bench           # 無猜盤面生成成本
+  npm run icons           # 從 SVG 重產 PNG 圖示
+  npm run deploy          # build + wrangler deploy
+  node scripts/screen-budget.mjs <url> --sel=.board --press="<全螢幕鈕選擇器>"
+
+
+■ 本機地雷(⚠⚠ 最重要的一條,不知道會查一整個下午)
+------------------------------------------------------------
+**Node 24 的 fs.rm* 只要「要刪的那條路徑含非 ASCII 字元」就會硬殺整個 node 進程**
+(Windows 退出碼 0xC0000409 / -1073740791,沒有例外、沒有堆疊、沒有任何訊息)。
+
+這個 repo 目前住在 C:\Users\agape250\Downloads\0916早\0916早\Desktop\hfpc-minesweeper
+—— 路徑裡有「早」⇒
+
+  · vite build 的 emptyOutDir 內部就是 fs.rm ⇒ **只要 dist/ 還在就必炸**,
+    畫面停在「✓ 67 modules transformed.」然後無聲死,**看起來像卡住不像壞掉**。
+    → 已用 scripts/clean-dist.mjs 當 prebuild 繞開(readdir+unlink+rmdir 自己遞迴)。
+  · wrangler deploy 收尾刪暫存目錄也會踩到 ⇒ **部署成功但退出碼非 0**。
+    → **判斷成敗看輸出有沒有「Deployed … triggers」與網址,不要看退出碼。**
+
+  實測對照(同一台機、node v24.13.0;判準是**解出來的目標路徑**,不是工作目錄):
+    目標純 ASCII                              → 正常
+    目標是含中文的絕對路徑(工作目錄純 ASCII)→ 當掉
+    工作目錄含中文 + 相對目標                 → 當掉(連刪單一檔案都當)
+    同樣路徑改用 unlinkSync + rmdirSync       → 都正常
+
+  ⇒ **根治:把 repo clone 到不含中文的路徑**(東西全部已 push,重 clone 一分鐘、零風險):
+      git clone https://github.com/summer09201017-cloud/hfpc-minesweeper.git C:\Users\<你>\code\hfpc-minesweeper
+  ⇒ 細節與 30 秒對照組定位法見合輯 skill `nonascii-path-trap`。
+
+其他小地雷:
+  · 主控台是 cp950 ⇒ python 腳本 print 中文會炸,加 PYTHONIOENCODING=utf-8。
+  · 改 .md 給使用者看時,合輯的 hook 會自動附 .txt/.html(本 repo 的 README 就是三份)。
+
+
+■ 檔案在哪(一檔一責見 CLAUDE.md)
+------------------------------------------------------------
+  src/game/     規則引擎、無猜生成器、三層 solver、教練層、版面計算、每日挑戰、紀錄
+  src/          store(zustand,唯一狀態來源)、theme / scenery(換皮與場景背景)、install(安裝)
+  src/components/  BoardView(棋盤與所有輸入)、MenuBar、Dialogs(含教學回放與安裝說明)、Glyphs(手繪 SVG)
+  scripts/      verify-browser(真瀏覽器 119 項)、check-offline、bench-gen、gen-icons、
+                clean-dist(繞開 Node 雷)、screen-budget(螢幕預算量尺)
+  index.html    統計打點、版號兩件套、視窗高度三層退路
+
+
+■ 下一步(從 roadmap.md 第一列抄)
+------------------------------------------------------------
+  ⏳ **最該做的其實是「等」**:-start / -lost-done / -quit-done 三個打點是今天才上線的。
+     再過 3~7 天 /stats 就能回答「孩子在哪一步放棄」——
+     「開局三秒就走」與「玩兩分鐘卡住才走」指向完全不同的下一個功能,現在猜等於白做。
+
+  與數據無關、可以先做的:
+  1. 🖼 每日挑戰分享圖卡(~1h,打磚塊 0916 那份純 canvas 1080×1440 可抄)
+  2. 🧪 練功房無限題 + 每日三軌(~2h,?seed= 已通,只差 UI)
+  3. 🏫 課堂模式(~2–3h,lesson-mode / classroom-* skill 現成)
+
+
+■ 跨場協作現況(2026-09-16)
+------------------------------------------------------------
+  · 本場把「全螢幕沒有真的變大」這個病在本站修完(v6),並把量尺
+    scripts/screen-budget.mjs 與三條誤判坑交給 0916-<俄羅斯方塊的全螢幕問題> 那場。
+  · **那場的 136 站稽核沒有跑完、完整名單不存在,不要等它**
+    (跑到第 9 站時 headless 連開 5 個 WebGL 站把瀏覽器打掛;使用者中途把方向從「只稽核」
+    改成「直接修」,只留 12 站收斂版當基準)。
+  · 「怎麼修」的知識**已經在合輯裡**,不要重寫:
+      force-landscape-pwa/patches/add-collapsible-zoom.mjs(認養既有 ⛶,補收殼與可收起工具列)
+      force-landscape-pwa/SKILL.md(含本站補的「工具列留在版面裡」代價表)
+      portrait-landscape-dual-layout(該不該鎖橫向)
+      silent-failure-patterns §62
+  · 本輪沉澱進合輯的 skill:css-scene-backdrop、nonascii-path-trap(合輯 199 → 201)。
+
+
+■ 一鍵裝齊 skill(換機時)
+------------------------------------------------------------
+  git clone https://github.com/summer09201017-cloud/hfpc-claude-skills.git
+  cd hfpc-claude-skills && install.bat        # Windows(裝 skills/commands/agents/hooks)
+  ⚠ 新指令與新註冊的 hook 要**下一個 session** 才生效。
