@@ -648,6 +648,89 @@ async function run() {
   await shot(daily, 'daily');
   await daily.close();
 
+  // ⑫ 📲 安裝到主畫面(圖示 + 三種平台的說法)
+  console.log();
+  console.log('▶ 安裝到主畫面');
+  const man = await (await fetch(`${BASE}/manifest.webmanifest`)).json();
+  const srcs = man.icons.map((i) => `${i.src}|${i.type}|${i.purpose}`);
+  check(
+    'manifest 有 PNG 192 與 512(只有 SVG 的話 iOS 會拿網頁縮圖當圖示)',
+    man.icons.some((i) => i.type === 'image/png' && i.sizes === '192x192') &&
+      man.icons.some((i) => i.type === 'image/png' && i.sizes === '512x512'),
+    srcs.join(' , ')
+  );
+  check(
+    'manifest 有 maskable 圖示(Android 會把圖示裁圓)',
+    man.icons.some((i) => String(i.purpose).includes('maskable')),
+    srcs.join(' , ')
+  );
+
+  // 圖示檔本身:副檔名叫 .png 不代表它是 PNG ⇒ 驗頭 8 個位元組
+  for (const rel of ['icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png']) {
+    const res = await fetch(`${BASE}/${rel}`);
+    const head = Buffer.from(await res.arrayBuffer()).subarray(0, 8);
+    const isPng = head.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    check(`${rel} 是真的 PNG(魔術位元組)`, res.ok && isPng, `${res.status} ${res.headers.get('content-type')}`);
+  }
+
+  const appleHref = await page.evaluate(
+    () => document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href') || ''
+  );
+  check('apple-touch-icon 指向 PNG(iOS 不吃 SVG)', appleHref.endsWith('.png'), appleHref);
+
+  // 說明選單裡永遠找得到安裝入口(橫幅被關掉之後就只剩這條路)
+  await openMenu(page, '說明');
+  await page.locator('.menu-item', { hasText: '安裝到主畫面' }).first().click();
+  await page.waitForSelector('.dialog');
+  check('「說明 → 安裝到主畫面」開得起來', await page.locator('.dialog').isVisible());
+  check(
+    '安裝說明有講「離線也能玩」(這才是使用者要裝的理由)',
+    /離線/.test(await page.locator('.dialog-body').innerText())
+  );
+  await page.locator('.dialog-actions .btn', { hasText: '關閉' }).click();
+  await page.waitForTimeout(150);
+
+  // iPhone:Chrome 的自動安裝事件永遠不會來 ⇒ 必須改成教他用分享選單
+  const iosCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+  });
+  const ios = await iosCtx.newPage();
+  await ios.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await ios.waitForSelector('.board .cell');
+  check('iPhone 上看得到安裝橫幅', (await ios.locator('.rotate-hint', { hasText: '主畫面' }).count()) > 0);
+  await ios.locator('.rotate-hint button', { hasText: '怎麼裝' }).first().click();
+  await ios.waitForSelector('.dialog');
+  const iosText = await ios.locator('.dialog-body').innerText();
+  check('iPhone 的說明教「分享 → 加入主畫面」而不是叫他按不存在的安裝鈕', /分享/.test(iosText) && /加入主畫面/.test(iosText), iosText.slice(0, 40));
+  check('iPhone 的說明有提醒一定要用 Safari', /Safari/.test(iosText));
+  check(
+    'iPhone 上不出現「現在安裝」鈕(按了也沒用的鈕最傷信任)',
+    (await ios.locator('.dialog-actions .btn', { hasText: '現在安裝' }).count()) === 0
+  );
+  await shot(ios, 'install-ios');
+  await iosCtx.close();
+
+  // LINE 內建瀏覽器:兩條路都走不了 ⇒ 要請他換瀏覽器,而不是讓他一直按
+  const lineCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent: 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36 Line/14.2.0'
+  });
+  const line = await lineCtx.newPage();
+  await line.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await line.waitForSelector('.board .cell');
+  await openMenu(line, '說明');
+  await line.locator('.menu-item', { hasText: '安裝到主畫面' }).first().click();
+  await line.waitForSelector('.dialog');
+  const lineText = await line.locator('.dialog-body').innerText();
+  check('LINE 裡明講「這裡裝不了、請換瀏覽器」', /LINE/.test(lineText) && /瀏覽器/.test(lineText), lineText.slice(0, 40));
+  await lineCtx.close();
+
   check('主控台沒有錯誤', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
   await desktop.close();
 

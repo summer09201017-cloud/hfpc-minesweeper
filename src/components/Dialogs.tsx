@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { UNDO_LIMIT, useGame } from '../store';
 import { RULE_HOW, RULE_LABEL, buildReplay } from '../game/coach';
+import { type InstallState } from '../install';
 import { FlagIcon } from './Glyphs';
 import { CUSTOM_LIMITS, type Difficulty, PRESETS } from '../game/types';
 import { clampSpec } from '../game/board';
@@ -563,6 +564,89 @@ export function ReplayDialog({ onClose }: { onClose: () => void }): JSX.Element 
         用過提示或悔一步的局不計成績;回放只是給你看,不會動到現在這一盤。
         悔一步一局 {UNDO_LIMIT} 次。
       </p>
+    </Dialog>
+  );
+}
+
+// ───────────────────────────── 📲 安裝到主畫面
+
+/**
+ * 安裝說明對話框。**三種平台講三種話** —— 混成一句的話,
+ * iPhone 的人會一直找那顆不存在的「安裝」鈕,LINE 裡的人會照做卻什麼都沒發生。
+ */
+export function InstallDialog({
+  state,
+  inAppName,
+  inAppHow,
+  onInstall,
+  onClose
+}: {
+  state: InstallState;
+  inAppName?: string;
+  inAppHow?: string;
+  onInstall: () => void;
+  onClose: () => void;
+}): JSX.Element {
+  return (
+    <Dialog
+      title="安裝到主畫面"
+      onClose={onClose}
+      actions={
+        state === 'ready' ? (
+          <button type="button" className="btn" onClick={onInstall}>
+            📲 現在安裝
+          </button>
+        ) : undefined
+      }
+    >
+      <p style={{ margin: '0 0 10px' }}>
+        裝起來之後:桌面有一顆地雷圖示、開啟沒有網址列、<b>離線也能玩</b>(無猜盤面是本機算的,
+        不用連網)。
+      </p>
+
+      {state === 'installed' ? (
+        <p style={{ margin: 0 }}>✅ 你已經裝好了 —— 現在就是從主畫面開的。</p>
+      ) : null}
+
+      {state === 'ready' ? (
+        <p style={{ margin: 0 }}>
+          按下面的「📲 現在安裝」就會跳出系統的安裝視窗。
+          <br />
+          (也可以走瀏覽器選單「⋮ → 安裝應用程式」)
+        </p>
+      ) : null}
+
+      {state === 'ios' ? (
+        <>
+          <p style={{ margin: '0 0 6px' }}>
+            <b>iPhone / iPad 請用 Safari</b>,而且要自己從分享選單加(iOS 沒有自動安裝鈕):
+          </p>
+          <ol style={{ margin: '0 0 10px', paddingLeft: 20, lineHeight: 1.9 }}>
+            <li>點畫面下方中間的「分享」鈕(方框加上箭頭)</li>
+            <li>往下捲,選「<b>加入主畫面</b>」</li>
+            <li>右上角「新增」</li>
+          </ol>
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-dim)' }}>
+            ⚠ iPhone 上的 Chrome / LINE 都做不到這件事,一定要 Safari。
+          </p>
+        </>
+      ) : null}
+
+      {state === 'inapp' ? (
+        <p style={{ margin: 0 }}>
+          你現在在 <b>{inAppName}</b> 的內建瀏覽器裡,它不給安裝。
+          <br />
+          {inAppHow} —— 用 Chrome 或 Safari 開同一個網址,就能裝了。
+        </p>
+      ) : null}
+
+      {state === 'none' ? (
+        <p style={{ margin: 0 }}>
+          這個瀏覽器沒有提供安裝功能(或這一頁還在判斷中)。
+          <br />
+          Android 請用 Chrome、iPhone 請用 Safari 開,再試一次。
+        </p>
+      ) : null}
     </Dialog>
   );
 }

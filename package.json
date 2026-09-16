@@ -14,6 +14,7 @@
     "verify": "node scripts/verify-browser.mjs",
     "deploy": "npm run build && wrangler deploy",
     "bench": "node scripts/bench-gen.mjs",
+    "icons": "node scripts/gen-icons.mjs",
     "check:offline": "node scripts/check-offline.mjs"
   },
   "dependencies": {

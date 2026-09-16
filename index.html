@@ -3,12 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#c0c0c0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="踩地雷" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+    <!-- ⚠ iOS 只吃 PNG 的 apple-touch-icon(SVG 會被忽略,桌面圖示變成網頁縮圖)。 -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <title>踩地雷 Minesweeper</title>
     <script>
       // 📏 高度三層退路(0915 全艦隊掃描的結論,新站一開始就寫對):
@@ -124,6 +126,11 @@
       (function () {
         // 最新的放最前面。改版只要在這裡插一筆，徽章會自己跟上。
         var APP_VERSIONS = [
+          {
+            v: 'v5',
+            d: '2026-09-16',
+            t: '📲 裝得到手機主畫面:補 PNG 圖示(192/512/maskable/apple-touch-icon —— iOS 只吃 PNG,原本只有 SVG 會讓 iPhone 拿網頁縮圖當圖示)、站內加安裝橫幅與「說明 → 安裝到主畫面」,Android 直接跳安裝視窗、iPhone 教「分享 → 加入主畫面」、LINE 內建瀏覽器明講要換瀏覽器'
+          },
           {
             v: 'v4',
             d: '2026-09-16',

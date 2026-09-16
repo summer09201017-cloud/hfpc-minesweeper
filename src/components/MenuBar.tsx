@@ -7,6 +7,7 @@ interface Props {
   onRecords: () => void;
   onHelp: () => void;
   onOptions: () => void;
+  onInstall: () => void;
 }
 
 const DIFF_LABELS: Record<Exclude<Difficulty, 'custom'>, string> = {
@@ -15,7 +16,7 @@ const DIFF_LABELS: Record<Exclude<Difficulty, 'custom'>, string> = {
   expert: '高級'
 };
 
-export function MenuBar({ onCustom, onRecords, onHelp, onOptions }: Props): JSX.Element {
+export function MenuBar({ onCustom, onRecords, onHelp, onOptions, onInstall }: Props): JSX.Element {
   const [open, setOpen] = useState<'game' | 'help' | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -145,6 +146,12 @@ export function MenuBar({ onCustom, onRecords, onHelp, onOptions }: Props): JSX.
           <button type="button" className="menu-item" onClick={pick(onHelp)}>
             <span className="check" />
             玩法說明…
+          </button>
+          {/* ★ 安裝入口要有一個「永遠找得到」的位置:橫幅按過「不用了」之後,
+              使用者仍然要能裝(而且多半是隔幾天才想裝)。 */}
+          <button type="button" className="menu-item" onClick={pick(onInstall)}>
+            <span className="check" />
+            安裝到主畫面…
           </button>
           <button
             type="button"

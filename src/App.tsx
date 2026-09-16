@@ -5,10 +5,18 @@ import { MenuBar } from './components/MenuBar';
 import {
   CustomDialog,
   HelpDialog,
+  InstallDialog,
   OptionsDialog,
   RecordsDialog,
   ReplayDialog
 } from './components/Dialogs';
+import {
+  type InstallState,
+  dismissBanner,
+  isBannerDismissed,
+  promptInstall,
+  watchInstall
+} from './install';
 import { FaceIcon, MineIcon, SevenSeg } from './components/Glyphs';
 import { challengeLabel } from './game/daily';
 import { unlockAudio } from './audio/sfx';
@@ -17,7 +25,7 @@ import { efficiency, formatPercent } from './game/metrics';
 
 const LOBBY_URL = 'https://hfpc-bible-games.summer09201017.workers.dev/';
 
-type DialogKind = 'custom' | 'records' | 'help' | 'options' | 'replay' | null;
+type DialogKind = 'custom' | 'records' | 'help' | 'options' | 'replay' | 'install' | null;
 
 /**
  * App 內建瀏覽器偵測(skill in-app-browser-guard)。
@@ -76,6 +84,8 @@ export default function App(): JSX.Element {
   const [portrait, setPortrait] = useState(false);
   const [fsNote, setFsNote] = useState<string | null>(null);
   const [inAppDismissed, setInAppDismissed] = useState(false);
+  const [install, setInstall] = useState<InstallState>('none');
+  const [bannerOff, setBannerOff] = useState(() => isBannerDismissed());
 
   // 每日挑戰 / 題號:一進來就把種子指定的第一格點掉,全世界同一天同一個開場。
   const bootRef = useRef(false);
@@ -158,6 +168,9 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, [newGame]);
 
+  // 📲 安裝狀態:Chrome 會在頁面載入後才發 beforeinstallprompt,所以要用訂閱的
+  useEffect(() => watchInstall(Boolean(IN_APP), setInstall), []);
+
   useEffect(() => {
     const onFs = (): void => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', onFs);
@@ -211,6 +224,16 @@ export default function App(): JSX.Element {
   }, []);
 
   const canUndo = useGame((s) => s.history.length > 0);
+  // 安裝鈕:能直接裝就直接裝;不能的話開說明(iOS 教分享選單、LINE 請他換瀏覽器)
+  const doInstall = useCallback(async () => {
+    if (install === 'ready') {
+      const ok = await promptInstall();
+      if (ok) setDialog(null);
+      return;
+    }
+    setDialog('install');
+  }, [install]);
+
   const label = challengeLabel(challenge);
   const wideBoard = board.width >= 24;
   const eff = lastResult ? lastResult.efficiency : efficiency(bbbv, clicks);
@@ -274,6 +297,33 @@ export default function App(): JSX.Element {
         </div>
       ) : null}
 
+      {/* 📲 安裝橫幅:只在真的裝得起來、還沒裝、也還沒被關掉時出現。
+          ★ 不做成常駐按鈕:裝過的人看它一輩子很吵;關掉之後「說明 → 安裝到主畫面」還找得到。 */}
+      {(install === 'ready' || install === 'ios') && !bannerOff ? (
+        <div className="rotate-hint">
+          📲 <b>裝到主畫面</b>,離線也能玩。
+          <button
+            type="button"
+            className="topbar-btn"
+            style={{ marginLeft: 8, minHeight: 34 }}
+            onClick={() => void doInstall()}
+          >
+            {install === 'ready' ? '安裝' : '怎麼裝?'}
+          </button>
+          <button
+            type="button"
+            className="topbar-btn"
+            style={{ marginLeft: 6, minHeight: 34 }}
+            onClick={() => {
+              dismissBanner();
+              setBannerOff(true);
+            }}
+          >
+            不用了
+          </button>
+        </div>
+      ) : null}
+
       {portrait && wideBoard ? (
         <div className="rotate-hint">
           📱 高級盤有 30 欄,直向會需要左右捲動 —— <b>把手機轉成橫向</b>比較好玩,
@@ -294,6 +344,7 @@ export default function App(): JSX.Element {
           onRecords={() => setDialog('records')}
           onHelp={() => setDialog('help')}
           onOptions={() => setDialog('options')}
+          onInstall={() => void doInstall()}
         />
 
         <div className="game-outer">
@@ -419,6 +470,15 @@ export default function App(): JSX.Element {
       {dialog === 'help' ? <HelpDialog onClose={() => setDialog(null)} /> : null}
       {dialog === 'options' ? <OptionsDialog onClose={() => setDialog(null)} /> : null}
       {dialog === 'replay' ? <ReplayDialog onClose={() => setDialog(null)} /> : null}
+      {dialog === 'install' ? (
+        <InstallDialog
+          state={install}
+          inAppName={IN_APP?.name}
+          inAppHow={IN_APP?.how}
+          onInstall={() => void doInstall()}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
     </div>
   );
 }
