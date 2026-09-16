@@ -490,7 +490,16 @@ async function run() {
   await page.locator('.board').focus();
   await page.waitForTimeout(150);
   check('鍵盤測試開始前這局還活著(不然 F/U 會假紅)', board0Alive(await page.locator('.cell[data-hit="true"]').count()));
+  // ★ 先一路往左推到底,再往右 —— 直接按 ArrowRight 的話,游標**有機率本來就在最右欄**
+  //   (提示會把游標帶過去),不動是對的,但訊息會寫成「方向鍵壞了 26 → 26」。
+  //   (0916 線上驗收踩到:本機跑五次都綠,線上第一次就紅。)
+  for (let n = 0; n < 32; n++) await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(120);
   const cur0 = Number(await page.locator('.cell[data-cursor]').first().getAttribute('data-i'));
+  const cols = await page.locator('.board').evaluate((el) =>
+    Number(getComputedStyle(el).getPropertyValue('--cols'))
+  );
+  check('游標推到最左欄就停住,不會繞到上一列', cur0 % cols === 0, `i=${cur0} / ${cols} 欄`);
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(120);
   const cur1 = Number(await page.locator('.cell[data-cursor]').first().getAttribute('data-i'));
