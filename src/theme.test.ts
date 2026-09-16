@@ -5,6 +5,7 @@ import {
   DEFAULT_THEME,
   REQUIRED_VARS,
   THEMES,
+  applyTheme,
   findBackdrop,
   findTheme
 } from './theme';
@@ -169,6 +170,41 @@ describe('數字看得見(WCAG 對比)', () => {
       if (ratio < 3) bad.push(`${t.id} = ${ratio.toFixed(2)}:1`);
     }
     expect(bad, bad.join(' / ')).toEqual([]);
+  });
+});
+
+describe('套用主題與背景', () => {
+  /** 假的 <html>:測試跑在 node 環境,沒有真的 DOM。 */
+  function fakeRoot(): { vars: Record<string, string>; el: HTMLElement } {
+    const vars: Record<string, string> = {};
+    const el = {
+      style: { setProperty: (k: string, v: string) => { vars[k] = v; } },
+      dataset: {} as Record<string, string>
+    };
+    return { vars, el: el as unknown as HTMLElement };
+  }
+
+  it('選了背景時,--desk-bg 用背景的,--desk-auto 仍保留主題自己的桌面色', () => {
+    // ★ 由來:選單裡「跟著主題」那顆預覽鈕如果讀 --desk-bg,
+    //   會把**現在選的那片場景**塞進 68×52 的小方塊,糊成一團(截圖才看得到)。
+    const { vars, el } = fakeRoot();
+    applyTheme('xp', 'night', el);
+    const xpDesk = findTheme('xp').vars['--desk-bg'];
+    expect(vars['--desk-bg']).toBe(findBackdrop('night').bg);
+    expect(vars['--desk-auto']).toBe(xpDesk);
+  });
+
+  it('背景選 auto 時兩個變數一致', () => {
+    const { vars, el } = fakeRoot();
+    applyTheme('dark', 'auto', el);
+    expect(vars['--desk-bg']).toBe(findTheme('dark').vars['--desk-bg']);
+    expect(vars['--desk-auto']).toBe(vars['--desk-bg']);
+  });
+
+  it('每個必要變數都真的被寫上去了', () => {
+    const { vars, el } = fakeRoot();
+    applyTheme('forest', 'bliss', el);
+    for (const v of REQUIRED_VARS) expect(vars[v], v).toBeTruthy();
   });
 });
 

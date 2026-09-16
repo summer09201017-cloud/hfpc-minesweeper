@@ -331,11 +331,76 @@ async function run() {
   await openMenu(page, '遊戲');
   await page.locator('.menu-item', { hasText: '選項' }).first().click();
   await page.waitForSelector('.dialog');
-  await page.locator('.backdrop-btn', { hasText: '夜空' }).first().click();
+  await page.locator('.backdrop-btn', { hasText: '星空夜色' }).first().click();
   await page.waitForTimeout(250);
   const bd = await readVars();
   check('換背景會蓋過主題的桌面色', bd.backdrop === 'night' && bd.desk !== darkVars.desk, bd.desk);
   check('換背景不會動到棋盤主題', bd.theme === 'dark' && bd.face === darkVars.face);
+
+  // ★ 場景圖層是「壞掉也沒人會發現」的一類:data URI 編錯(例如 # 沒編成 %23)
+  //   時瀏覽器不報錯、console 全乾淨,只是那一層默默不畫 —— 畫面還是一片漂亮的漸層。
+  //   ⇒ 這裡把 body 算出來的每一層 SVG 都真的丟給 Image 解一次,解不開才算數。
+  const layersOk = await page.evaluate(async () => {
+    const bg = getComputedStyle(document.body).backgroundImage;
+    const urls = Array.from(bg.matchAll(/url\("(data:image\/svg\+xml,[^"]*)"\)/g), (m) => m[1]);
+    const results = await Promise.all(
+      urls.map(
+        (u) =>
+          new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img.naturalWidth > 0);
+            img.onerror = () => resolve(false);
+            img.src = u;
+          })
+      )
+    );
+    return { total: urls.length, ok: results.filter(Boolean).length };
+  });
+  check(
+    '夜色場景的每一層 SVG 都真的解得開(# 沒編碼的話會整層無聲消失)',
+    layersOk.total >= 4 && layersOk.ok === layersOk.total,
+    `${layersOk.ok}/${layersOk.total} 層`
+  );
+  await shot(page, 'backdrop-night');
+
+  // 其餘場景各驗一輪 + 存截圖(圖層數是「有沒有被簡化回單層漸層」的哨兵)
+  for (const [name, id, least] of [
+    ['草原藍天', 'bliss', 8],
+    ['月夜森林', 'moonlit', 4],
+    ['夕陽', 'sunset', 5]
+  ]) {
+    await page.locator('.backdrop-btn', { hasText: name }).first().click();
+    await page.waitForTimeout(250);
+    const r = await page.evaluate(async (want) => {
+      const bg = getComputedStyle(document.body).backgroundImage;
+      const urls = Array.from(bg.matchAll(/url\("(data:image\/svg\+xml,[^"]*)"\)/g), (m) => m[1]);
+      const ok = await Promise.all(
+        urls.map(
+          (u) =>
+            new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => resolve(img.naturalWidth > 0);
+              img.onerror = () => resolve(false);
+              img.src = u;
+            })
+        )
+      );
+      return {
+        id: document.documentElement.dataset.backdrop,
+        total: urls.length,
+        ok: ok.filter(Boolean).length,
+        want
+      };
+    }, least);
+    check(
+      `「${name}」場景畫得出來(${least} 層以上,每一層都解得開)`,
+      r.id === id && r.total >= least && r.ok === r.total,
+      `${r.id}:${r.ok}/${r.total} 層`
+    );
+    await shot(page, `backdrop-${id}`);
+  }
+  await page.locator('.backdrop-btn', { hasText: '星空夜色' }).first().click();
+  await page.waitForTimeout(200);
 
   // 背景音樂:預設關(別人家的孩子在教室打開不該突然出聲)
   const musicBox = page.locator('.dialog label', { hasText: '播放背景音樂' }).locator('input');

@@ -199,15 +199,19 @@ export function OptionsDialog({ onClose }: { onClose: () => void }): JSX.Element
             className="backdrop-btn"
             aria-pressed={backdrop === b.id}
             onClick={() => patch({ backdrop: b.id })}
-            title={b.name}
-            style={{ background: b.bg ?? 'var(--desk-bg)' }}
+            title={b.note ? `${b.name} —— ${b.note}` : b.name}
+            // ★ 預覽用 swatch 不用 bg:場景是用 vmin 畫的(跟著整個視窗大小走),
+            //   塞進 68×52 的小鈕裡會變成「一坨放大到看不出是什麼的太陽」。
+            style={{ background: b.swatch ?? b.bg ?? 'var(--desk-auto)' }}
           >
             {b.name}
           </button>
         ))}
       </div>
       <div className="hint" style={{ marginLeft: 0 }}>
-        背景和主題各選各的 —— 想要經典灰棋盤配夜空,或高對比棋盤配素色底,都行。
+        背景和主題各選各的 —— 想要經典灰棋盤配星空,或高對比棋盤配素色底,都行。
+        草原有太陽白雲彩虹樹林野花、夜色有弦月銀河流星、月夜森林還有螢火蟲;
+        全部是現畫的向量圖,沒有圖檔要下載,離線一樣看得到。投影上課建議選「素灰」,最不搶戲。
       </div>
 
       <h3 style={{ marginTop: 14 }}>背景音樂</h3>

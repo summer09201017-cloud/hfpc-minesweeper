@@ -12,6 +12,8 @@
  *   這條有測試守著(themes.test.ts:每個主題逐色算 WCAG 對比)。
  */
 
+import { BACKDROPS as BACKDROP_LIST, type Backdrop } from './scenery';
+
 export interface Theme {
   id: string;
   name: string;
@@ -235,26 +237,12 @@ export const THEMES: Theme[] = [
   }
 ];
 
-export interface Backdrop {
-  id: string;
-  name: string;
-  /** null = 跟著主題走 */
-  bg: string | null;
-}
-
 /**
- * 背景獨立於主題 —— 有人就是想要經典灰視窗配夜空,或高對比棋盤配素色底。
- * 綁在一起的話這些組合全做不到。
+ * 背景(桌面那片「窗外風景」)已經搬到 `scenery.ts` —— 場景畫的 SVG 很長,
+ * 混在主題色票裡會讓這個檔案變得沒人想打開。這裡只把型別與名單原樣轉出去,
+ * 舊的 `import { BACKDROPS } from './theme'` 一行都不用改。
  */
-export const BACKDROPS: Backdrop[] = [
-  { id: 'auto', name: '跟著主題', bg: null },
-  { id: 'bliss', name: '草原藍天', bg: 'linear-gradient(180deg, #5aa7e8 0%, #a8d8f0 55%, #6aa84f 55%, #3f7a2e 100%)' },
-  { id: 'night', name: '夜空', bg: 'linear-gradient(180deg, #0b1020, #1a2a44)' },
-  { id: 'sunset', name: '夕陽', bg: 'linear-gradient(180deg, #ff9a5a, #d9536b 55%, #4a2a5a)' },
-  { id: 'teal', name: '98 青綠', bg: '#008080' },
-  { id: 'plain', name: '素灰', bg: '#6b6b6b' },
-  { id: 'paper', name: '牛皮紙', bg: '#d9c9a3' }
-];
+export { BACKDROPS, svgUrl, type Backdrop } from './scenery';
 
 export const DEFAULT_THEME = 'xp';
 export const DEFAULT_BACKDROP = 'auto';
@@ -264,7 +252,7 @@ export function findTheme(id: string): Theme {
 }
 
 export function findBackdrop(id: string): Backdrop {
-  return BACKDROPS.find((b) => b.id === id) ?? BACKDROPS[0];
+  return BACKDROP_LIST.find((b) => b.id === id) ?? BACKDROP_LIST[0];
 }
 
 /**
@@ -280,6 +268,10 @@ export function applyTheme(themeId: string, backdropId: string, root?: HTMLEleme
   const backdrop = findBackdrop(backdropId);
   // auto ⇒ 用主題自己的桌面色;其餘 ⇒ 背景蓋過主題
   el.style.setProperty('--desk-bg', backdrop.bg ?? theme.vars['--desk-bg']);
+  // ★ 另外留一份「主題原本的桌面色」:選單裡「跟著主題」那顆預覽鈕要畫的是它。
+  //   用 --desk-bg 的話,那顆鈕會把**現在這片場景**整個塞進 68×52 的方塊裡糊成一團
+  //   (2026-09-16 截圖驗收看到的)。
+  el.style.setProperty('--desk-auto', theme.vars['--desk-bg']);
 
   el.dataset.theme = theme.id;
   el.dataset.backdrop = backdrop.id;

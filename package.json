@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "_note_prebuild": "⚠ build 前一定要先清 dist —— 路徑含中文時 Node 24 的 fs.rm 會硬當掉整個 process(Windows 0xC0000409),而 vite 的 emptyOutDir 正是用它 ⇒ dist 存在就必炸,畫面只停在『transformed』像卡住。原因與實測見 scripts/clean-dist.mjs 檔頭。",
+    "prebuild": "node scripts/clean-dist.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host --port 4173",
     "test": "vitest run",
