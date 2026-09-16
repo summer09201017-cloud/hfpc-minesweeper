@@ -121,3 +121,8 @@ SHOT_DIR=scripts/out/shots npm run verify      # 順便存截圖
 ```bash
 npm run deploy     # build + wrangler deploy --name hfpc-minesweeper --assets dist
 ```
+
+⚠ 在含中文的路徑下,`npm run deploy` **部署成功但退出碼會是 `0xC0000409`**
+(wrangler 收尾時去刪暫存目錄,踩到上面那個 Node 24 的 `fs.rm` 雷)。
+判斷成不成功要看輸出裡有沒有 `Deployed hfpc-minesweeper triggers` 與網址,不要看退出碼 ——
+否則 CI/腳本會把一次成功的部署當成失敗,然後有人去「修」一個沒有壞的東西。
