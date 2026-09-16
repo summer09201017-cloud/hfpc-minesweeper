@@ -128,7 +128,7 @@ npm run bench      # 無猜盤面生成成本實測
 ```
 
 ⚠ **建置前一定會先清掉 `dist/`**(`prebuild` 自動做)。原因不是潔癖:
-**Node 24 的 `fs.rm*` 只要「工作目錄路徑含非 ASCII 字元」就會讓整個 node 進程硬當掉**
+**Node 24 的 `fs.rm*` 只要「要刪的那條路徑含非 ASCII 字元」就會讓整個 node 進程硬當掉**
 (Windows 退出碼 `0xC0000409`,沒有例外、沒有訊息),而 vite 的 `emptyOutDir` 正是用它。
 這個 repo 目前住在含中文的路徑下 ⇒ 只要 `dist/` 存在,`vite build` 就停在
 「✓ modules transformed.」然後無聲死掉,看起來像卡住。實測與對照組寫在
