@@ -4,10 +4,15 @@
  * ★ 由來(2026-09-16):使用者說「全螢幕放大後跟放大前差不多,下方選單也不能收起來」。
  *   艦隊稽核如果用「有沒有 ⛶ 鈕」當判準,會**漏掉一整批** —— 踩地雷就有鈕、照樣紅:
  *   瀏覽器的全螢幕只收得掉它自己那條網址列(約 56px),而遊戲自己的殼可能有 286px。
- *   ⇒ 真判準是這三個數字:
+ *   ⇒ 真判準是這四個數字:
  *       ① 殼佔螢幕高的百分比
  *       ② 主畫面(canvas/棋盤)佔螢幕面積的百分比
  *       ③ 整頁要捲幾個螢幕才看得完
+ *       ④ **主畫面上有多少比例的點,其實點不到主畫面**(被浮動工具列/徽章接走)
+ *
+ * ★ 第 ④ 條是 0916-<俄羅斯方塊的全螢幕問題> 那場提出來的,而且他們量到真案例:
+ *   工具列壓在橫向棋盤頂端 ⇒ 12×12 點陣裡 9 點(6.3%)被接走,**而 ①②③ 三個數字前後完全沒變**。
+ *   「看得到、也夠大,就是點不到」——這一族只有逐點 elementFromPoint 量得出來。
  *
  * 用法:
  *   node scripts/screen-budget.mjs <url> [--sel=canvas,.board] [--json]
@@ -57,15 +62,34 @@ for (const [name, viewport] of VIEWPORTS) {
         for (const el of document.querySelectorAll(s.trim())) {
           const r = el.getBoundingClientRect();
           if (!best || r.width * r.height > best.w * best.h) {
-            best = { w: Math.round(r.width), h: Math.round(r.height) };
+            best = { w: Math.round(r.width), h: Math.round(r.height), el };
           }
         }
       }
+      const stageOut = best ? { w: best.w, h: best.h } : null;
       return {
         vw: innerWidth,
         vh: innerHeight,
-        stage: best,
+        stage: stageOut,
         pageH: document.documentElement.scrollHeight,
+        // ④ 主畫面上被別的元素接走的取樣點 %(12×12 點陣)
+        stolen: (() => {
+          if (!best || !best.el) return null;
+          const r = best.el.getBoundingClientRect();
+          if (r.width < 8 || r.height < 8) return null;
+          let hit = 0, total = 0;
+          for (let gy = 0; gy < 12; gy++) {
+            for (let gx = 0; gx < 12; gx++) {
+              const x = r.left + (r.width * (gx + 0.5)) / 12;
+              const y = r.top + (r.height * (gy + 0.5)) / 12;
+              if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;
+              total++;
+              const top = document.elementFromPoint(x, y);
+              if (top && top !== best.el && !best.el.contains(top)) hit++;
+            }
+          }
+          return total ? { pct: +((hit / total) * 100).toFixed(1), hit, total } : null;
+        })(),
         // 有沒有「一直站在那裡」的固定列(常見的收不起來的選單)
         fixedBars: [...document.querySelectorAll('body *')]
           .filter((el) => {
@@ -101,13 +125,14 @@ for (const [name, viewport] of VIEWPORTS) {
     const chromeH = m.stage ? Math.max(0, m.pageH - m.stage.h) : m.vh;
     const screens = m.pageH / m.vh;
     const light = stageArea >= 0.55 && screens <= 1.05 ? '🟢' : stageArea >= 0.35 && screens <= 1.2 ? '🟡' : '🔴';
-    const row = { url, viewport: name, light, stageArea: +(stageArea * 100).toFixed(1), chromePct: +((chromeH / m.vh) * 100).toFixed(0), screens: +screens.toFixed(2), stage: m.stage, fixedBars: m.fixedBars };
+    const row = { url, viewport: name, light, stolen: m.stolen, stageArea: +(stageArea * 100).toFixed(1), chromePct: +((chromeH / m.vh) * 100).toFixed(0), screens: +screens.toFixed(2), stage: m.stage, fixedBars: m.fixedBars };
     if (after) {
       const aArea = after.stage ? (after.stage.w * after.stage.h) / (after.vw * after.vh) : 0;
       row.after = {
         stageArea: +(aArea * 100).toFixed(1),
         screens: +(after.pageH / after.vh).toFixed(2),
-        stage: after.stage
+        stage: after.stage,
+        stolen: after.stolen
       };
       // 面積沒多 10%、捲動也沒少 0.1 個螢幕 ⇒ 那顆鈕等於沒有用
       row.pressHelps = aArea - stageArea > 0.1 || row.screens - row.after.screens > 0.1;
@@ -134,6 +159,7 @@ if (asJson) {
     console.log(
       `${r.light} ${r.viewport}  主畫面 ${String(r.stageArea).padStart(5)}% 面積 ` +
         `(${r.stage.w}×${r.stage.h})  殼佔高 ${String(r.chromePct).padStart(3)}%  整頁 ${r.screens} 個螢幕` +
+        (r.stolen ? `  觸控被接走 ${r.stolen.pct}%(${r.stolen.hit}/${r.stolen.total} 點)` : '') +
         (r.fixedBars.length ? `  固定列:${r.fixedBars.map((b) => `${b.cls || b.tag}(${b.h}px)`).join(' ')}` : '')
     );
     if (r.after) {
@@ -144,7 +170,8 @@ if (asJson) {
           : '❌ 按了等於沒按 —— 只收掉瀏覽器那條網址列,自己的殼一格沒少';
       console.log(
         `   ${verdict}:主畫面 ${r.stageArea}% → ${r.after.stageArea}%` +
-          `(${r.after.stage.w}×${r.after.stage.h})  整頁 ${r.screens} → ${r.after.screens} 個螢幕`
+          `(${r.after.stage.w}×${r.after.stage.h})  整頁 ${r.screens} → ${r.after.screens} 個螢幕` +
+          (r.after.stolen ? `  觸控被接走 ${r.stolen?.pct ?? '?'}% → ${r.after.stolen.pct}%` : '')
       );
     }
   }
