@@ -234,6 +234,9 @@ export function BoardView(): JSX.Element {
           style={
             {
               '--cols': board.width,
+              // ★ --rows 是 0916 新加的:格子大小要同時受高度限制(見 xp.css 的 --cell-by-h),
+              //   少了它,橫向時棋盤會長到螢幕外面去。
+              '--rows': board.height,
               ...(cellSizeSetting > 0 ? { '--cell': `${cellSizeSetting}px` } : {})
             } as React.CSSProperties
           }

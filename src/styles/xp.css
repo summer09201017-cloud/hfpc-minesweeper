@@ -292,8 +292,17 @@ body {
        量它們等於量棋盤自己 ⇒ 每量一次就縮一點,自己追自己,而且第一幀會先寬出畫面。
      ★ 22px 是觸控下限 —— 寧可左右捲動,也不要小到點不中。
      --board-chrome = #root 內距 16 + 視窗框 6 + game-outer 內距 12 + 凹陷框 6 */
-  --board-chrome: 40px;
-  --cell: clamp(22px, calc((var(--app-w, 100vw) - var(--board-chrome)) / var(--cols)), 34px);
+  --board-chrome: 38px;
+  /* ★★ 一定要同時看高度:只用寬度算的話,手機**橫向**寬度很寬 ⇒ 格子放到 34px 上限
+     ⇒ 棋盤反而比螢幕還高,要上下捲 1.6~2.2 個螢幕(2026-09-16 實測)。
+     而踩地雷的核心是「一眼掃全盤」,要捲就等於玩不下去,捲動還會和長按插旗打架。
+     常數與 src/game/fit.ts 同步(那邊有測試釘著兩邊不准漂移)。 */
+  --cell-by-w: clamp(22px, calc((var(--app-w, 100vw) - var(--board-chrome)) / var(--cols)), 34px);
+  /* 高度那一邊的判斷需要「縮了到底放不放得下」這個條件判斷,CSS 的 min()/max() 表達不了
+     ⇒ 由 src/game/fit.ts 算好寫成 --cell-fit(它只讀**視窗尺寸**,不量容器,
+     不會踩到「容器寬度被棋盤撐出來、量它等於自己追自己」那個坑)。
+     JS 還沒寫上去(首幀/沒 JS)時自動退回只看寬度的版本,和舊行為相同。 */
+  --cell: var(--cell-fit, var(--cell-by-w));
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--cell));
   background: var(--face);
@@ -720,4 +729,76 @@ body {
 
 .replay-board .cell {
   cursor: default;
+}
+
+/* ── ⛶ 沉浸模式(0916 v6)
+   由來:使用者說「全螢幕放大後跟放大前差不多,下方選單也不能收起來」。
+   量出來確實如此 —— 瀏覽器的全螢幕只收掉它自己那條網址列(約 56px),
+   而我們自己的殼有 286px(手機直向)/ 234px(橫向,佔螢幕高 60%)。
+   ⇒ ⛶ 不只要全螢幕,還要把自己的殼收起來。
+   ★ 刻意**不用浮動覆蓋層**當工具列:那會蓋住棋盤、偷走格子的觸控
+     (本 repo 0915 踩過:角落 fixed 徽章偷走按鈕下緣,截圖與目視都看不出來)。
+     改成「還在版面裡、但變精簡」的一列,結構上不可能遮到棋盤。 */
+
+:root {
+  --ui-chrome: 300px;
+}
+
+:root[data-immersive='1'] {
+  --ui-chrome: 150px;
+}
+
+:root[data-immersive='1'] .topbar,
+:root[data-immersive='1'] .menubar,
+:root[data-immersive='1'] .statusbar,
+:root[data-immersive='1'] .window > .titlebar {
+  display: none;
+}
+
+:root[data-immersive='1'] #root {
+  padding: 4px;
+}
+
+:root[data-immersive='1'] .window {
+  border-width: 2px;
+}
+
+:root[data-immersive='1'] .game-outer {
+  padding: 4px;
+}
+
+/* 沉浸時底部只留四顆:離開 / 提示 / 悔一步 / 新局(圖示為主) */
+:root[data-immersive='1'] .mobile-bar {
+  gap: 6px;
+  padding: 2px 0 0;
+}
+
+:root[data-immersive='1'] .mobile-bar button {
+  min-height: 40px;
+  min-width: 44px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+:root[data-immersive='1'] .mobile-bar button[data-immersive-hide] {
+  display: none;
+}
+
+/* ── 手機窄螢幕:底部列不可以排成兩列
+   0916 實測 390px 寬時 5 顆鈕排成 2 列、吃掉 100px(= 棋盤少掉 100px)。
+   「新局」與「說明」在畫面上**各有另一個入口**(笑臉鈕 / 說明選單)⇒ 窄螢幕收掉它們。 */
+@media (max-width: 460px) {
+  .mobile-bar {
+    gap: 5px;
+  }
+
+  .mobile-bar button {
+    min-width: 44px;
+    padding: 0 8px;
+    font-size: 13px;
+  }
+
+  .mobile-bar button[data-dup] {
+    display: none;
+  }
 }

@@ -731,6 +731,68 @@ async function run() {
   check('LINE 裡明講「這裡裝不了、請換瀏覽器」', /LINE/.test(lineText) && /瀏覽器/.test(lineText), lineText.slice(0, 40));
   await lineCtx.close();
 
+  // ⑬ ⛶ 沉浸模式(0916 v6):使用者說「全螢幕跟放大前差不多、下方選單收不起來」
+  console.log();
+  console.log('▶ 沉浸模式與手機版面');
+  {
+    const ph = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const q = await ph.newPage();
+    await q.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await q.waitForSelector('.board .cell');
+    await q.waitForTimeout(400);
+
+    const read = () =>
+      q.evaluate(() => {
+        const bd = document.querySelector('.board').getBoundingClientRect();
+        const vis = (sel) => {
+          const el = document.querySelector(sel);
+          return el ? el.getBoundingClientRect().height > 0 : false;
+        };
+        const barBtns = [...document.querySelectorAll('.mobile-bar button')].filter((x) => x.offsetParent !== null);
+        return {
+          cell: Math.round(parseFloat(getComputedStyle(document.querySelector('.cell')).width)),
+          boardH: Math.round(bd.height),
+          pageH: document.documentElement.scrollHeight,
+          vh: innerHeight,
+          topbar: vis('.topbar'),
+          menubar: vis('.menubar'),
+          statusbar: vis('.statusbar'),
+          barRows: new Set(barBtns.map((x) => Math.round(x.getBoundingClientRect().top))).size,
+          immersive: document.documentElement.dataset.immersive === '1'
+        };
+      });
+
+    const before = await read();
+    check('手機直向:底部控制列不可以排成兩列(排兩列等於棋盤少 100px)', before.barRows === 1, `${before.barRows} 列`);
+    check('手機直向初級盤不用捲動', before.pageH <= before.vh + 4, `整頁 ${before.pageH} / 視窗 ${before.vh}`);
+    check('手機直向格子有吃滿寬度(≥36px)', before.cell >= 36, `${before.cell}px`);
+
+    await q.locator('.topbar-btn[aria-pressed]').click();
+    await q.waitForTimeout(400);
+    const after = await read();
+    check('⛶ 真的收起自己的殼(不是只收瀏覽器那條網址列)', after.immersive && !after.topbar && !after.menubar && !after.statusbar,
+      `immersive=${after.immersive} topbar=${after.topbar} menubar=${after.menubar} statusbar=${after.statusbar}`);
+    check('沉浸模式後仍有離開的路(底部列還在)', after.barRows >= 1);
+    await shot(q, 'immersive-portrait');
+
+    // 橫向:這才是 ⛶ 真正救得到的情境
+    const land = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+    const r = await land.newPage();
+    await r.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await r.waitForSelector('.board .cell');
+    await r.waitForTimeout(400);
+    const pageOf = () => r.evaluate(() => document.documentElement.scrollHeight / innerHeight);
+    const landBefore = await pageOf();
+    check('手機橫向(沒收殼)本來就要捲 —— 而且畫面上有說出來', landBefore > 1.05 && (await r.locator('.rotate-hint').count()) > 0, `${landBefore.toFixed(2)} 個螢幕`);
+    await r.locator('.topbar-btn[aria-pressed]').click();
+    await r.waitForTimeout(450);
+    const landAfter = await pageOf();
+    check('⛶ 之後橫向初級盤整盤看得完(不用上下捲)', landAfter <= 1.02, `${landBefore.toFixed(2)} → ${landAfter.toFixed(2)} 個螢幕`);
+    await shot(r, 'immersive-landscape');
+    await land.close();
+    await ph.close();
+  }
+
   check('主控台沒有錯誤', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
   await desktop.close();
 
@@ -750,16 +812,37 @@ async function run() {
   const cellBox = await mp.locator('.cell').first().boundingBox();
   check('手機格子 ≥ 22px(點得中)', cellBox && cellBox.width >= 22, `${cellBox?.width}px`);
 
-  for (const label of ['模式', '新局', '說明']) {
-    const b = mp.locator('.mobile-bar button', { hasText: label }).first();
-    const box = await b.boundingBox();
+  // ★ 0916 起「新局」「說明」在窄螢幕**刻意隱藏**(它們各有另一個入口:笑臉鈕 / 說明選單)——
+  //   五顆鈕在 390px 寬會排成兩列、吃掉 100px,等於棋盤少一大塊。
+  //   ⇒ 檢查改成兩段:①看得到的每一顆都要夠大 ②被收起來的功能**必須還到得了**
+  //   (只驗「收起來了」不驗「還到得了」的話,下一次有人順手把入口也刪掉,沒有人會發現)。
+  const visibleBarLabels = await mp.evaluate(() =>
+    [...document.querySelectorAll('.mobile-bar button')]
+      .filter((b) => b.offsetParent !== null)
+      .map((b) => b.textContent.trim())
+  );
+  check('手機控制列至少留下三顆常用鈕', visibleBarLabels.length >= 3, visibleBarLabels.join(' '));
+  for (const label of visibleBarLabels) {
+    const box = await mp.locator('.mobile-bar button', { hasText: label }).first().boundingBox();
     check(`手機控制列「${label}」觸控目標 ≥ 44px`, box && box.height >= 44, `${box?.height}px`);
   }
+  const barRows = await mp.evaluate(
+    () =>
+      new Set(
+        [...document.querySelectorAll('.mobile-bar button')]
+          .filter((b) => b.offsetParent !== null)
+          .map((b) => Math.round(b.getBoundingClientRect().top))
+      ).size
+  );
+  check('手機控制列只排一列(排兩列 = 棋盤白白少 100px)', barRows === 1, `${barRows} 列`);
+  check('被收起來的「新局」還到得了 —— 笑臉鈕就是新局', (await mp.locator('.face-btn').count()) === 1);
+  check('被收起來的「說明」還到得了 —— 說明選單裡有', (await mp.locator('.menubar button', { hasText: '說明' }).count()) >= 1);
 
   // ★ 常駐迴歸:固定徽章不可以蓋住手機控制列的按鈕
   const barStolen = await mp.evaluate(() => {
     const out = [];
     for (const b of document.querySelectorAll('.mobile-bar button')) {
+      if (b.offsetParent === null) continue; // 窄螢幕刻意隱藏的那幾顆不必驗遮擋
       const r = b.getBoundingClientRect();
       for (const [dx, dy] of [
         [0.5, 0.25],

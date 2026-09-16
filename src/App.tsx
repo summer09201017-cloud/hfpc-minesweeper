@@ -22,6 +22,7 @@ import { challengeLabel } from './game/daily';
 import { unlockAudio } from './audio/sfx';
 import { bgm } from './audio/bgm';
 import { efficiency, formatPercent } from './game/metrics';
+import { adviceFor, computeFit } from './game/fit';
 
 const LOBBY_URL = 'https://hfpc-bible-games.summer09201017.workers.dev/';
 
@@ -77,11 +78,16 @@ export default function App(): JSX.Element {
   const [dialog, setDialog] = useState<DialogKind>(null);
   // 鍵盤監聽器要知道「現在有沒有對話框開著」,但它不該因此每次重掛 ⇒ 用 ref 傳
   const dialogOpenRef = useRef(false);
+  // Esc 要先離開沉浸模式(不然使用者會困在收起選單的畫面裡);用 ref 才不必重掛監聽器
+  const escapeImmersiveRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     dialogOpenRef.current = dialog !== null;
   }, [dialog]);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [portrait, setPortrait] = useState(false);
+  // ⛶ 沉浸模式:把我們自己的殼收起來。和「瀏覽器全螢幕」是**兩件事** ——
+  // 瀏覽器只收得掉它自己那條網址列(約 56px),而我們的殼有 286px(手機直向實測)。
+  // iOS Safari 根本沒有 requestFullscreen,但沉浸模式照樣有效 ⇒ 兩件事要分開記。
+  const [immersive, setImmersive] = useState(false);
+  const [viewport, setViewport] = useState({ w: 0, h: 0 });
   const [fsNote, setFsNote] = useState<string | null>(null);
   const [inAppDismissed, setInAppDismissed] = useState(false);
   const [install, setInstall] = useState<InstallState>('none');
@@ -152,6 +158,10 @@ export default function App(): JSX.Element {
         return;
       }
       if (k === 'Escape') {
+        if (document.documentElement.dataset.immersive === '1') {
+          escapeImmersiveRef.current?.();
+          return;
+        }
         g.clearHint();
         return;
       }
@@ -172,47 +182,70 @@ export default function App(): JSX.Element {
   useEffect(() => watchInstall(Boolean(IN_APP), setInstall), []);
 
   useEffect(() => {
-    const onFs = (): void => setIsFullscreen(Boolean(document.fullscreenElement));
+    const onFs = (): void => {
+      // 使用者按 Esc 離開全螢幕 ⇒ 殼也要跟著回來,不然他會以為選單不見了
+      if (!document.fullscreenElement) setImmersive(false);
+    };
     document.addEventListener('fullscreenchange', onFs);
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
 
   useEffect(() => {
-    const check = (): void => setPortrait(window.innerHeight > window.innerWidth);
+    const check = (): void =>
+      setViewport({
+        w: window.visualViewport?.width ?? window.innerWidth,
+        h: window.visualViewport?.height ?? window.innerHeight
+      });
     check();
     window.addEventListener('resize', check);
     window.addEventListener('orientationchange', check);
+    window.visualViewport?.addEventListener('resize', check);
     return () => {
       window.removeEventListener('resize', check);
       window.removeEventListener('orientationchange', check);
+      window.visualViewport?.removeEventListener('resize', check);
     };
   }, []);
 
-  // ⛶ 全螢幕(game-must-haves)。iOS Safari 沒有 Element.requestFullscreen ⇒ 藏起來,
-  //    不要放一顆按了沒反應的鈕。
-  const fullscreenSupported =
-    typeof document !== 'undefined' && Boolean(document.documentElement.requestFullscreen);
+  // 沉浸狀態寫到 <html> 上,CSS 才收得掉那幾層殼(見 xp.css :root[data-immersive])
+  useEffect(() => {
+    const el = document.documentElement;
+    if (immersive) el.dataset.immersive = '1';
+    else delete el.dataset.immersive;
+  }, [immersive]);
+
 
   // ★ 失敗一定要講出來,不可以靜默:LINE/FB 的 WebView 常直接拒絕,
   //   使用者會以為是按鈕壞了,然後跑去手機設定裡亂調(那裡根本沒有這個開關)。
-  const toggleFullscreen = useCallback(() => {
-    const fail = (): void =>
-      setFsNote(
-        IN_APP
-          ? `${IN_APP.name} 的內建瀏覽器不給全螢幕 —— ${IN_APP.how}`
-          : '這個瀏覽器不給全螢幕,可以用「選項」把格子調大。'
-      );
+  /**
+   * ⛶ = 沉浸模式 +(拿得到的話)瀏覽器全螢幕。
+   * ★ 順序很重要:**先收自己的殼**,再去要全螢幕。
+   *   要不到全螢幕(iOS Safari / LINE 內建瀏覽器)時,棋盤照樣變大 ——
+   *   舊版只做 requestFullscreen,所以那些人按了等於什麼都沒發生。
+   */
+  const toggleImmersive = useCallback(() => {
+    const goingIn = !immersive;
+    setImmersive(goingIn);
+    setFsNote(null);
     try {
-      if (document.fullscreenElement) {
-        void document.exitFullscreen();
+      if (!goingIn) {
+        if (document.fullscreenElement) void document.exitFullscreen();
         return;
       }
-      const p = document.documentElement.requestFullscreen();
-      if (p && typeof p.catch === 'function') p.catch(fail);
+      const p = document.documentElement.requestFullscreen?.();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() =>
+          setFsNote(
+            IN_APP
+              ? `${IN_APP.name} 的內建瀏覽器不給全螢幕(選單已經收起來了,棋盤變大了)—— 要整個滿版的話 ${IN_APP.how}`
+              : '這個瀏覽器不給全螢幕,不過選單已經收起來了,棋盤變大了。'
+          )
+        );
+      }
     } catch {
-      fail();
+      setFsNote('這個瀏覽器不給全螢幕,不過選單已經收起來了,棋盤變大了。');
     }
-  }, []);
+  }, [immersive]);
 
   // ← 返回大廳:玩到一半先問一次,不然誤觸就整局沒了
   const backToLobby = useCallback(() => {
@@ -224,6 +257,27 @@ export default function App(): JSX.Element {
   }, []);
 
   const canUndo = useGame((s) => s.history.length > 0);
+  const setDifficulty = useGame((s) => s.setDifficulty);
+  const fitInput = {
+    cols: board.width,
+    rows: board.height,
+    viewportW: viewport.w,
+    viewportH: viewport.h,
+    immersive
+  };
+  const fitAdvice = viewport.w > 0 ? adviceFor(fitInput) : ({ kind: 'ok' } as const);
+  const cellSize = useGame((s) => s.cellSize);
+
+  // 把算好的格子大小交給 CSS(見 xp.css 的 --cell)。
+  // 玩家在「選項」裡指定了大小就完全讓給他,不要偷偷蓋掉他的選擇。
+  useEffect(() => {
+    const el = document.documentElement;
+    if (viewport.w <= 0 || cellSize > 0) {
+      el.style.removeProperty('--cell-fit');
+      return;
+    }
+    el.style.setProperty('--cell-fit', `${Math.floor(computeFit(fitInput).cell)}px`);
+  }, [viewport.w, viewport.h, immersive, board.width, board.height, cellSize]);
   // 安裝鈕:能直接裝就直接裝;不能的話開說明(iOS 教分享選單、LINE 請他換瀏覽器)
   const doInstall = useCallback(async () => {
     if (install === 'ready') {
@@ -234,8 +288,9 @@ export default function App(): JSX.Element {
     setDialog('install');
   }, [install]);
 
+  escapeImmersiveRef.current = immersive ? () => toggleImmersive() : null;
+
   const label = challengeLabel(challenge);
-  const wideBoard = board.width >= 24;
   const eff = lastResult ? lastResult.efficiency : efficiency(bbbv, clicks);
 
   // 音訊要等第一個使用者手勢才解得開(瀏覽器自動播放政策)。
@@ -253,19 +308,17 @@ export default function App(): JSX.Element {
           ← 大廳
         </button>
         <span className="topbar-title">{label ?? '踩地雷 Minesweeper'}</span>
-        {fullscreenSupported ? (
-          <button
-            type="button"
-            className="topbar-btn"
-            onClick={toggleFullscreen}
-            aria-pressed={isFullscreen}
-            title={isFullscreen ? '離開全螢幕' : '全螢幕'}
-          >
-            {isFullscreen ? '⛶ 離開' : '⛶'}
-          </button>
-        ) : (
-          <span style={{ width: 44 }} />
-        )}
+        {/* ★ 這顆鈕**不再**依賴 requestFullscreen 存不存在:
+            iOS Safari 沒有全螢幕 API,但「把殼收起來」它做得到,而那才是棋盤變大的主因。 */}
+        <button
+          type="button"
+          className="topbar-btn"
+          onClick={toggleImmersive}
+          aria-pressed={immersive}
+          title={immersive ? '離開沉浸模式' : '沉浸模式:收起選單、棋盤放到最大'}
+        >
+          ⛶
+        </button>
       </div>
 
       {IN_APP && !inAppDismissed ? (
@@ -324,10 +377,29 @@ export default function App(): JSX.Element {
         </div>
       ) : null}
 
-      {portrait && wideBoard ? (
+      {/* 📱 版面建議一律用**算的**,不要用猜的。
+          舊版寫死「高級盤請轉橫向」,而 0916 量出來那句話是錯的:
+          轉過去要捲更多(橫向 1.9 個螢幕 vs 直向 1.4 個)。 */}
+      {fitAdvice.kind === 'rotate' ? (
         <div className="rotate-hint">
-          📱 高級盤有 30 欄,直向會需要左右捲動 —— <b>把手機轉成橫向</b>比較好玩,
-          或在「選項」裡把格子調小。
+          📱 這個盤面在現在的方向放不下(會需要捲動)——
+          <b>{fitAdvice.to === 'landscape' ? '把手機轉成橫向' : '把手機轉回直向'}</b>就整盤看得完。
+          也可以按 <b>⛶</b> 把選單收起來。
+        </div>
+      ) : null}
+      {fitAdvice.kind === 'too-big' ? (
+        <div className="rotate-hint">
+          📱 <b>{board.width}×{board.height}</b> 是給電腦螢幕的盤面 ——
+          這台裝置<b>不論直向橫向都要捲動</b>,而踩地雷要一眼看得完全盤才好玩。
+          建議用平板或電腦,或
+          <button
+            type="button"
+            className="topbar-btn"
+            style={{ marginLeft: 8, minHeight: 34 }}
+            onClick={() => setDifficulty('intermediate')}
+          >
+            改玩中級
+          </button>
         </div>
       ) : null}
 
@@ -432,6 +504,12 @@ export default function App(): JSX.Element {
         >
           {flagMode ? '🚩 插旗模式' : '⛏ 挖掘模式'}
         </button>
+        {/* 沉浸模式時,離開鈕要在看得到的地方 —— topbar 已經收起來了 */}
+        {immersive ? (
+          <button type="button" onClick={toggleImmersive} title="離開沉浸模式,把選單放回來">
+            ⛶ 離開
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={requestHint}
@@ -453,14 +531,22 @@ export default function App(): JSX.Element {
             type="button"
             onClick={() => setDialog('replay')}
             title="教學回放:這盤本來可以怎麼一步一步推出來"
+            data-immersive-hide=""
           >
             🤖 教學回放
           </button>
         ) : null}
-        <button type="button" onClick={newGame} title="開新遊戲">
+        {/* data-dup:笑臉鈕就是新局、說明選單裡就有說明 ⇒ 窄螢幕收掉,底部列才不會排成兩列 */}
+        <button type="button" onClick={newGame} title="開新遊戲" data-dup="">
           🙂 新局
         </button>
-        <button type="button" onClick={() => setDialog('help')} title="玩法說明">
+        <button
+          type="button"
+          onClick={() => setDialog('help')}
+          title="玩法說明"
+          data-dup=""
+          data-immersive-hide=""
+        >
           ？說明
         </button>
       </div>
