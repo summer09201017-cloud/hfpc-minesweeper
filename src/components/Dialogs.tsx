@@ -1,5 +1,7 @@
-import { type ReactNode, useState } from 'react';
-import { useGame } from '../store';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { UNDO_LIMIT, useGame } from '../store';
+import { RULE_HOW, RULE_LABEL, buildReplay } from '../game/coach';
+import { FlagIcon } from './Glyphs';
 import { CUSTOM_LIMITS, type Difficulty, PRESETS } from '../game/types';
 import { clampSpec } from '../game/board';
 import { clearRecords, getStat, recordKey } from '../game/records';
@@ -392,6 +394,27 @@ export function HelpDialog({ onClose }: { onClose: () => void }): JSX.Element {
         <li>F2:開新遊戲</li>
       </ul>
 
+      <h3>鍵盤(不用滑鼠也能玩)</h3>
+      <ul style={{ margin: '0 0 10px', paddingLeft: 20 }}>
+        <li><b>方向鍵</b>(或 WASD):移動游標</li>
+        <li><b>空白鍵 / Enter</b>:翻開;站在數字上按就是和弦展開</li>
+        <li><b>F</b>:插旗</li>
+        <li><b>H</b>:提示 —— 推理引擎會指一格「確定安全」或「確定是雷」的給你</li>
+        <li><b>U</b>:悔一步(一局 3 次,踩到雷也能復活)</li>
+        <li><b>Esc</b>:收掉提示</li>
+      </ul>
+      <p style={{ margin: '0 0 10px' }}>
+        ⚠ 用過<b>提示</b>或<b>悔一步</b>的那一局<b>不計入最佳成績</b> ——
+        不然最佳時間表會被輔助功能灌爆,正常玩的紀錄永遠破不了。
+      </p>
+
+      <h3>教學回放 🤖</h3>
+      <p style={{ margin: '0 0 10px' }}>
+        一局結束後(通關或踩雷都可以)按「教學回放」,它會用<b>同一支推理引擎</b>
+        把這盤從第一格開始重推一遍,一步一步告訴你當時可以怎麼看出來 ——
+        綠色是推得出來一定安全的格子,紅色是一定是雷的。
+      </p>
+
       <h3>手機</h3>
       <ul style={{ margin: '0 0 10px', paddingLeft: 20 }}>
         <li>點一下:翻開</li>
@@ -411,6 +434,134 @@ export function HelpDialog({ onClose }: { onClose: () => void }): JSX.Element {
       <p style={{ margin: 0 }}>
         網址加上 <code>?daily</code> 就是今天的題,全世界同一天拿到同一盤、同一個開場。
         <code>?seed=123456</code> 可以指定題號,老師報號給全班玩同一盤。
+      </p>
+    </Dialog>
+  );
+}
+
+
+// ───────────────────────────── 教學回放
+
+/**
+ * 🤖 教學回放 —— 把「這盤本來可以怎麼推」一步一步演出來。
+ *
+ * ★ 用的是**遊戲本身那支** solver(coach.buildReplay → solver.ts),
+ *   不是另外寫一套漂亮的示範:所以演出來的每一步,都真的是當初拿來保證
+ *   「這盤不用猜」的那套推理。示範跟保證是同一件事,才不會有「教的跟做的不一樣」。
+ * ★ 推不動時**誠實講**「這盤到這裡就要猜了」,不假裝有解。
+ */
+export function ReplayDialog({ onClose }: { onClose: () => void }): JSX.Element {
+  const board = useGame((s) => s.board);
+  const firstIndex = useGame((s) => s.firstIndex);
+
+  // 高級盤要跑幾百步推理 ⇒ 只在開啟時算一次
+  const replay = useMemo(
+    () => (firstIndex == null ? null : buildReplay(board, firstIndex)),
+    [board, firstIndex]
+  );
+
+  const [i, setI] = useState(0);
+  const [auto, setAuto] = useState(false);
+  const steps = replay?.steps ?? [];
+  const last = steps.length - 1;
+
+  useEffect(() => {
+    if (!auto || steps.length === 0) return;
+    const id = window.setInterval(() => {
+      setI((n) => {
+        if (n >= last) {
+          setAuto(false);
+          return n;
+        }
+        return n + 1;
+      });
+    }, 900);
+    return () => window.clearInterval(id);
+  }, [auto, last, steps.length]);
+
+  if (replay == null || steps.length === 0) {
+    return (
+      <Dialog title="教學回放" onClose={onClose}>
+        <p style={{ margin: 0 }}>
+          {firstIndex == null
+            ? '先玩一局(至少點第一下),才有東西可以回放。'
+            : '這盤從第一格開始就推不動 —— 真的只能猜。'}
+        </p>
+      </Dialog>
+    );
+  }
+
+  const step = steps[Math.min(i, last)];
+  const cells: JSX.Element[] = [];
+  for (let n = 0; n < step.revealed.length; n++) {
+    const isSafe = step.safe.includes(n);
+    const isMine = step.mines.includes(n);
+    const revealed = step.revealed[n];
+    const known = step.mineKnown[n];
+    const num = revealed && step.adj[n] > 0 ? step.adj[n] : 0;
+    cells.push(
+      <div
+        key={n}
+        className="cell"
+        data-state={revealed ? 'revealed' : known ? 'flag' : 'hidden'}
+        data-n={num || undefined}
+        data-hint={isSafe ? 'safe' : isMine ? 'mine' : undefined}
+      >
+        {known ? <FlagIcon /> : num ? num : null}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog
+      title={`教學回放 ${i + 1} / ${steps.length}`}
+      onClose={onClose}
+      actions={
+        <>
+          <button type="button" className="btn" onClick={() => setI((n) => Math.max(0, n - 1))}>
+            ◀ 上一步
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setI((n) => Math.min(last, n + 1))}
+          >
+            下一步 ▶
+          </button>
+          <button
+            type="button"
+            className="btn"
+            aria-pressed={auto}
+            onClick={() => setAuto((v) => !v)}
+          >
+            {auto ? '⏸ 暫停' : '▶▶ 自動'}
+          </button>
+        </>
+      }
+    >
+      <div className="replay-scroll">
+        <div className="board replay-board" style={{ '--cols': replay.width } as React.CSSProperties}>
+          {cells}
+        </div>
+      </div>
+      <p style={{ margin: '8px 0 2px', fontWeight: 700 }}>
+        {RULE_LABEL[step.rule]}
+        {step.safe.length > 0 ? `・推出 ${step.safe.length} 格安全(綠)` : ''}
+        {step.mines.length > 0 ? `・推出 ${step.mines.length} 顆雷(紅)` : ''}
+      </p>
+      <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-dim)' }}>{RULE_HOW[step.rule]}</p>
+      {i >= last ? (
+        <p style={{ margin: '8px 0 0', fontSize: 12.5 }}>
+          {replay.end === 'solved'
+            ? '✅ 到這裡整盤都推得出來 —— 這局從頭到尾都不用猜。'
+            : replay.end === 'stuck'
+              ? '🍀 推到這裡就推不動了 —— 這盤接下來真的只能猜(關掉「無猜盤面」時會遇到)。'
+              : '⏱ 步數太多,回放到這裡先停 —— 不代表推不下去。'}
+        </p>
+      ) : null}
+      <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--ink-dim)' }}>
+        用過提示或悔一步的局不計成績;回放只是給你看,不會動到現在這一盤。
+        悔一步一局 {UNDO_LIMIT} 次。
       </p>
     </Dialog>
   );

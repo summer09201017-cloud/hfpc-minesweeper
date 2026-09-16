@@ -61,6 +61,8 @@ async function reset(page, settings = {}) {
 }
 
 const cellAt = (page, i) => page.locator(`.cell[data-i="${i}"]`);
+/** 沒有任何「踩到的那一格」= 這局還在進行中 */
+const board0Alive = (hitCount) => hitCount === 0;
 const countRevealed = (page) => page.locator('.cell[data-state="revealed"]').count();
 
 /** 七段顯示器讀不出數字(它是 SVG),改讀 aria-label。 */
@@ -437,6 +439,163 @@ async function run() {
   check('高對比主題套得起來', hc.theme === 'contrast' && hc.face.toLowerCase() === '#ffffff', JSON.stringify(hc));
   await shot(page, 'theme-contrast');
   await reset(page);
+
+  // ⑧.8 💡 提示 / ↩ 悔一步 / ⌨ 鍵盤 / 🤖 教學回放(0916 v4)
+  await reset(page);
+  // 打點的探針:psPing 在 localhost 會自己 return,所以這裡包一層記下來就好
+  await page.evaluate(() => {
+    window.__pings = [];
+    const orig = window.psPing;
+    window.psPing = (k, t) => {
+      window.__pings.push(t == null ? k : `${k}:${t}`);
+      if (orig) orig(k, t);
+    };
+  });
+
+  await cellAt(page, 40).click();
+  await page.waitForTimeout(700); // 無猜盤面要生
+
+  const pings = await page.evaluate(() => window.__pings || []);
+  check('真的開局會送 -start 打點(放棄率的分母)', pings.includes('minesweeper-start'), pings.join(','));
+
+  // 💡 提示
+  await page.locator('.mobile-bar button', { hasText: '提示' }).click();
+  await page.waitForTimeout(250);
+  const hinted = await page.locator('.cell[data-hint]').count();
+  check('提示會指出一格(綠=安全 / 紅=雷)', hinted >= 1, `${hinted} 格`);
+  check('提示有文字說明', await page.locator('.coach').first().isVisible());
+  const hintCell = await page.locator('.cell[data-hint]').first().getAttribute('data-i');
+  const hintKind = await page.locator('.cell[data-hint]').first().getAttribute('data-hint');
+  check('提示指的格子沒有騙人(綠色那格點下去不會炸)', hintKind === 'safe' || hintKind === 'mine', String(hintKind));
+  check(
+    '用過提示後狀態列標明「不計紀錄」',
+    /不計紀錄/.test(await page.locator('.statusbar').innerText())
+  );
+
+  // 綠色提示點下去真的不會死 —— 提示講錯話是這個功能最嚴重的失敗
+  if (hintKind === 'safe') {
+    await cellAt(page, Number(hintCell)).click();
+    await page.waitForTimeout(200);
+    check(
+      '照著「一定安全」的提示點下去不會踩雷',
+      (await page.locator('.cell[data-hit="true"]').count()) === 0
+    );
+  }
+
+  // ⌨ 鍵盤:方向鍵移游標、F 插旗、U 悔一步
+  // ★★ 這裡**不可以用「點棋盤某個座標」來讓它拿到焦點** —— 那一格有機率就是雷,
+  //    踩下去遊戲就結束了,後面的 F/U 全部失效,而失敗訊息會是「F 鍵插不了旗 0 → 0」,
+  //    看起來像功能壞了。(0916 實際踩到:同一段程式單獨跑必過、整輪跑偶爾紅。)
+  //    棋盤本來就有 tabIndex=0,直接 focus() 就好,零副作用。
+  await page.locator('.board').focus();
+  await page.waitForTimeout(150);
+  check('鍵盤測試開始前這局還活著(不然 F/U 會假紅)', board0Alive(await page.locator('.cell[data-hit="true"]').count()));
+  const cur0 = Number(await page.locator('.cell[data-cursor]').first().getAttribute('data-i'));
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(120);
+  const cur1 = Number(await page.locator('.cell[data-cursor]').first().getAttribute('data-i'));
+  check('方向鍵會移動鍵盤游標', cur1 === cur0 + 1, `${cur0} → ${cur1}`);
+
+  // ★ 先把游標移到一格**還沒開**的格子上 —— 站在已開的格子上按 F 本來就不該有事,
+  //   第一版測試就是這樣假紅的(量到 0 → 0,看起來像 F 鍵壞了)。
+  for (let n = 0; n < 40; n++) {
+    const st = await page.locator('.cell[data-cursor]').first().getAttribute('data-state');
+    if (st === 'hidden') break;
+    await page.keyboard.press(n % 3 === 2 ? 'ArrowDown' : 'ArrowRight');
+    await page.waitForTimeout(30);
+  }
+  check(
+    '找得到一格未開的格子放游標(接下來才驗得了 F 鍵)',
+    (await page.locator('.cell[data-cursor]').first().getAttribute('data-state')) === 'hidden'
+  );
+
+  const flagsBefore = await page.locator('.cell[data-state="flag"]').count();
+  await page.keyboard.press('f');
+  await page.waitForTimeout(150);
+  const flagsAfter = await page.locator('.cell[data-state="flag"]').count();
+  check('F 鍵插得了旗', flagsAfter === flagsBefore + 1, `${flagsBefore} → ${flagsAfter}`);
+
+  const undoLabelBefore = await page.locator('.mobile-bar button', { hasText: '悔一步' }).innerText();
+  await page.keyboard.press('u');
+  await page.waitForTimeout(150);
+  const flagsUndone = await page.locator('.cell[data-state="flag"]').count();
+  const undoLabelAfter = await page.locator('.mobile-bar button', { hasText: '悔一步' }).innerText();
+  check('U 鍵悔一步會把剛剛那面旗收回去', flagsUndone === flagsBefore, `${flagsAfter} → ${flagsUndone}`);
+  check('悔一步次數會減少', undoLabelBefore !== undoLabelAfter, `${undoLabelBefore} → ${undoLabelAfter}`);
+
+  // 🤖 教學回放
+  await page.locator('.mobile-bar button', { hasText: '教學回放' }).click();
+  await page.waitForSelector('.dialog');
+  const replayCells = await page.locator('.replay-board .cell').count();
+  check('教學回放畫得出小棋盤', replayCells === 81, `${replayCells} 格`);
+  const cap0 = await page.locator('.dialog-body p').first().innerText();
+  const title0 = await page.locator('.dialog .titlebar-text').innerText();
+  await page.locator('.dialog-actions .btn', { hasText: '下一步' }).click();
+  await page.waitForTimeout(200);
+  const title1 = await page.locator('.dialog .titlebar-text').innerText();
+  check('教學回放「下一步」真的會前進', title0 !== title1, `${title0} → ${title1}`);
+  check('教學回放有講用了哪一條規則', /規則|窮舉/.test(cap0), cap0.slice(0, 40));
+  await page.locator('.dialog-actions .btn', { hasText: '關閉' }).click();
+  await page.waitForTimeout(150);
+  await shot(page, 'coach-hint');
+
+  // 💥 踩雷 → 死因分析 → ↩ 復活(這功能的重點就在這條路徑上)
+  await reset(page, { noGuess: false }); // 一般盤比較容易踩到,不必等無猜盤生成
+  await cellAt(page, 40).click();
+  await page.waitForTimeout(250);
+  let died = false;
+  for (let i = 0; i < 81 && !died; i++) {
+    const st = await cellAt(page, i).getAttribute('data-state');
+    if (st !== 'hidden') continue;
+    await cellAt(page, i).click();
+    await page.waitForTimeout(60);
+    died = (await page.locator('.cell[data-hit="true"]').count()) > 0;
+  }
+  check('踩得到雷(接下來才驗得了死因分析)', died);
+  if (died) {
+    const lesson = await page.locator('.coach').first().innerText();
+    check(
+      '踩雷後有死因分析,而且三種說法之一',
+      /推得出來|一定安全|只能猜/.test(lesson),
+      lesson.slice(0, 50)
+    );
+    check(
+      '只能猜的時候要明講「不是你的錯」',
+      !/只能猜/.test(lesson) || /不是你的錯/.test(lesson),
+      lesson.slice(0, 60)
+    );
+    await page.locator('.coach button', { hasText: '復活' }).click();
+    await page.waitForTimeout(250);
+    check('↩ 復活之後可以繼續玩(踩到的那一格回到未開)', (await page.locator('.cell[data-hit="true"]').count()) === 0);
+    check(
+      '復活後狀態列標明這局不計紀錄',
+      /不計紀錄/.test(await page.locator('.statusbar').innerText())
+    );
+    await shot(page, 'coach-death');
+  }
+
+  // 按新局 = 放棄這局,統計要收得到
+  // ★ 這段要**自己重來一局**:上面那局已經踩雷結算過(記過帳了),
+  //   按新局不算「放棄」—— 不重來的話這裡會紅,而且看起來像打點壞了。
+  await reset(page, { noGuess: false });
+  await page.evaluate(() => {
+    window.__pings = [];
+    const orig = window.psPing;
+    window.psPing = (k, t) => {
+      window.__pings.push(t == null ? k : `${k}:${t}`);
+      if (orig) orig(k, t);
+    };
+  });
+  await cellAt(page, 40).click();
+  await page.waitForTimeout(300);
+  await page.locator('.mobile-bar button', { hasText: '新局' }).click();
+  await page.waitForTimeout(250);
+  const quitPings = await page.evaluate(() => window.__pings || []);
+  check(
+    '玩到一半按新局會送 -quit-done(放棄率的分子)',
+    quitPings.some((p) => String(p).startsWith('minesweeper-quit-done')),
+    quitPings.join(',')
+  );
 
   // ⑨ 艦隊必備件
   check('有「← 大廳」鈕', (await page.locator('.topbar-btn', { hasText: '大廳' }).count()) === 1);

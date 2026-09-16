@@ -12,9 +12,13 @@ interface CellProps {
   index: number;
   lost: boolean;
   hit: boolean;
+  /** 鍵盤游標停在這一格 */
+  focused: boolean;
+  /** 提示指著這一格:safe = 一定安全、mine = 一定是雷 */
+  hint?: 'safe' | 'mine';
 }
 
-const CellView = memo(function CellView({ cell, index, lost, hit }: CellProps) {
+const CellView = memo(function CellView({ cell, index, lost, hit, focused, hint }: CellProps) {
   const wrongFlag = lost && cell.state === 'flag' && !cell.mine;
   const showMine = cell.state === 'revealed' && cell.mine;
   const number = cell.state === 'revealed' && !cell.mine && cell.adj > 0 ? cell.adj : 0;
@@ -22,13 +26,17 @@ const CellView = memo(function CellView({ cell, index, lost, hit }: CellProps) {
   return (
     <div
       className="cell"
+      id={`cell-${index}`}
       data-i={index}
       data-state={wrongFlag ? 'revealed' : cell.state}
       data-n={number || undefined}
       data-hit={hit || undefined}
       data-wrong={wrongFlag || undefined}
+      data-cursor={focused || undefined}
+      data-hint={hint}
       role="gridcell"
       aria-label={cellLabel(cell, wrongFlag, showMine, number)}
+      aria-selected={focused || undefined}
     >
       {wrongFlag ? (
         <WrongFlagIcon />
@@ -45,6 +53,16 @@ const CellView = memo(function CellView({ cell, index, lost, hit }: CellProps) {
   );
 });
 
+/** 提示指的是不是這一格。提示一次只指一格,所以這裡幾乎都是 undefined。 */
+function hintKindAt(
+  hint: { kind: string; cells: readonly number[] } | null,
+  i: number
+): 'safe' | 'mine' | undefined {
+  if (!hint) return undefined;
+  if (hint.kind !== 'safe' && hint.kind !== 'mine') return undefined;
+  return hint.cells.includes(i) ? (hint.kind as 'safe' | 'mine') : undefined;
+}
+
 function cellLabel(cell: Cell, wrongFlag: boolean, showMine: boolean, number: number): string {
   if (wrongFlag) return '插錯的旗';
   if (showMine) return '地雷';
@@ -59,6 +77,8 @@ export function BoardView(): JSX.Element {
   const generating = useGame((s) => s.generating);
   const flagMode = useGame((s) => s.flagMode);
   const cellSizeSetting = useGame((s) => s.cellSize);
+  const cursor = useGame((s) => s.cursor);
+  const hint = useGame((s) => s.hint);
   const openCell = useGame((s) => s.openCell);
   const markCell = useGame((s) => s.markCell);
   const chordCell = useGame((s) => s.chordCell);
@@ -207,6 +227,10 @@ export function BoardView(): JSX.Element {
           className="board"
           role="grid"
           aria-label="踩地雷棋盤"
+          // ★ 鍵盤:整張棋盤只放一個 tabIndex,再用 aria-activedescendant 指出游標在哪一格。
+          //   480 格各給一個 tabIndex 的話,使用者要按 480 次 Tab 才能離開棋盤。
+          tabIndex={0}
+          aria-activedescendant={`cell-${cursor}`}
           style={
             {
               '--cols': board.width,
@@ -227,6 +251,8 @@ export function BoardView(): JSX.Element {
               index={i}
               lost={board.status === 'lost'}
               hit={board.hitIndex === i}
+              focused={cursor === i}
+              hint={hintKindAt(hint, i)}
             />
           ))}
         </div>

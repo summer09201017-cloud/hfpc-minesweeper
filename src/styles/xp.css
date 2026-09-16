@@ -624,3 +624,100 @@ body {
     transition: none !important;
   }
 }
+
+/* ── ⌨ 鍵盤游標 / 💡 提示 / 🤖 教學回放(0916 v4) */
+
+/* 游標框用 inset box-shadow 而不是 outline:outline 會被相鄰格子蓋掉半邊,
+   而且在 30×16 的高級盤上那半邊剛好是最難看的那一邊。 */
+.cell[data-cursor] {
+  box-shadow:
+    inset 0 0 0 2px #ff8c00,
+    inset 0 0 0 4px rgba(255, 255, 255, 0.55);
+}
+
+/* 棋盤拿到焦點時游標要更明顯 —— 不然純鍵盤使用者不知道按鍵會落在哪裡 */
+.board:focus-visible {
+  outline: 3px solid #ff8c00;
+  outline-offset: 2px;
+}
+
+.board:focus-visible .cell[data-cursor] {
+  box-shadow:
+    inset 0 0 0 3px #ff6a00,
+    inset 0 0 0 5px rgba(255, 255, 255, 0.6);
+}
+
+/* 提示:綠=一定安全、紅=一定是雷。
+   ★ 不只用顏色 —— 還加了粗框與脈動,紅綠色盲也分得出來(a11y 鐵則)。 */
+.cell[data-hint='safe'] {
+  background: #b7f0b7;
+  box-shadow: inset 0 0 0 3px #128a12;
+  animation: hint-pulse 1.1s ease-in-out infinite;
+}
+
+.cell[data-hint='mine'] {
+  background: #ffc2c2;
+  box-shadow: inset 0 0 0 3px #b81414;
+  animation: hint-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes hint-pulse {
+  from {
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell[data-hint] {
+    animation: none;
+  }
+}
+
+/* 教練訊息列(提示說明 / 死因分析) */
+.coach {
+  max-width: min(680px, 96vw);
+  margin: 6px auto 0;
+  padding: 7px 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #111;
+  background: #fffbe6;
+  border: 2px solid #b8960c;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.coach-safe {
+  background: #e4fbe4;
+  border-color: #128a12;
+}
+
+.coach-mine,
+.coach-knowable-mine {
+  background: #ffecec;
+  border-color: #b81414;
+}
+
+.coach-pure-guess {
+  background: #eaf2ff;
+  border-color: #2b5fb8;
+}
+
+/* 教學回放的小棋盤:高級盤 30 欄要塞進對話框,格子固定小一點並允許捲動 */
+.replay-scroll {
+  max-width: 100%;
+  overflow: auto;
+  padding-bottom: 4px;
+}
+
+.replay-board {
+  --cell: 20px;
+  --bevel: 2px;
+  margin: 0 auto;
+}
+
+.replay-board .cell {
+  cursor: default;
+}
