@@ -164,6 +164,15 @@ body {
   color: #fff;
 }
 
+/* 👍 like-comment-kit 首頁收合版的落腳處(1013 批次 2):選單列本來就吃不滿寬度,
+   margin-left:auto 把它推到最右邊那段空白,不會讓這一列變高。 */
+.menubar-feedback-slot {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .menu-popup {
   position: absolute;
   top: 100%;

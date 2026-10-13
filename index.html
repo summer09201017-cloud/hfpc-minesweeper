@@ -34,7 +34,82 @@
     </script>
   </head>
   <body>
+    <!-- 👍 首頁收合版(like-comment-kit 1013 批次 2):跟結算畫面那份同一個 g,按讚會互相同步。
+         ★ 這支 repo 是 React SPA,#root 底下的節點由 React 接管、widget 的 <script> 又要靠
+         document.currentScript 找自己(不能用 JS 動態插 script),所以這個 div 靜態放在
+         index.html、React 一律不碰它的存在與否。放在這裡只是給 widget.js 在頁面解析完、
+         script 執行當下找得到的「家」——真正顯示的位置由 MenuBar.tsx 的 useLayoutEffect
+         在畫面畫出來之前就把它搬進選單列右側(「🙂 新局」鈕所在的視窗同一眼視野內;本站沒有
+         獨立的開始畫面,新局鈕/選單列就是等效位置)。
+         ★ 這幾行把收合鈕壓到最小(0916 screen-budget 的教訓:手機直向初級盤是「剛好填滿
+         視窗、零容錯」的版面,widget 預設的 16px 上下 margin + 44px 高鈕會把頁面撐出視窗,
+         逼出原本不該有的捲動——實測過,插在頁面最上方會讓 844 視窗變 894/876,量出來才知道,
+         所以才改搬進選單列而不是留在頁面頂端)。用 #id 選擇器蓋過 widget 自己的 .hfpc-fb
+         規則(id 優先權較高,不管誰的 <style> 先插入都蓋得過)。 -->
+    <style>
+      #hfpc-feedback-home {
+        margin: 0;
+      }
+      #hfpc-feedback-home .hf-fold > summary {
+        min-height: 28px;
+        padding: 3px 10px;
+        font-size: 12px;
+        border-width: 1px;
+        white-space: nowrap;
+      }
+      #hfpc-feedback-home .hf-fold[open] > summary {
+        margin-bottom: 4px;
+      }
+      /* 展開時跟 .menu-popup 用同一招:浮出來的面板用 position:absolute,
+         不要讓選單列那一行被撐高(選單列本身就吃不滿寬度,撐高了反而難看)。 */
+      #hfpc-feedback-home .hf-fold {
+        position: relative;
+      }
+      #hfpc-feedback-home .hf-fold[open] > div {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        z-index: 60;
+        width: max-content;
+        max-width: min(320px, 92vw);
+        max-height: 70vh;
+        overflow: auto;
+        background: #c0c0c0;
+        border: 2px solid;
+        border-color: #fff #808080 #808080 #fff;
+        box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.4);
+        padding: 10px;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+    </style>
+    <div id="hfpc-feedback-home"></div>
+    <script
+      src="https://hfpc-feedback.summer09201017.workers.dev/widget.js"
+      data-g="minesweeper"
+      data-mode="free"
+      data-like="👍 好玩就按個讚"
+      data-title="踩地雷"
+      data-root="#hfpc-feedback-home"
+      data-collapsed
+      defer
+    ></script>
+
     <div id="root"></div>
+
+    <!-- 💬 結算畫面那份:本站沒有獨立的「結算畫面」DOM(一局結束是在 statusbar 內改一行文字
+         顯示「🎉 通關/💥 踩到雷了」),所以把這個 div 平常藏起來,改由 App.tsx 既有的
+         useEffect(觀察 lastResult)在一局結束時顯示、新局時收起來,等於「搬進結算區」。 -->
+    <div id="hfpc-feedback" style="display: none; max-width: 980px; margin: 8px auto 0; padding: 0 8px"></div>
+    <script
+      src="https://hfpc-feedback.summer09201017.workers.dev/widget.js"
+      data-g="minesweeper"
+      data-mode="free"
+      data-like="👍 好玩就按個讚"
+      data-title="踩地雷"
+      defer
+    ></script>
+
     <script type="module" src="/src/main.tsx"></script>
 
     <script>
@@ -126,6 +201,11 @@
       (function () {
         // 最新的放最前面。改版只要在這裡插一筆，徽章會自己跟上。
         var APP_VERSIONS = [
+          {
+            v: 'v7',
+            d: '2026-10-13',
+            t: '👍 可以按讚、留言了——開始畫面多一顆「💬 按讚・留言」(平常收起來,點開才展開),一局結束的畫面也有一份,兩邊按一次就算數。按讚每台裝置一次;留言有兩種:點短語(👍 好聽、🙏 感動、🕊️ 平安、😊 太好玩了、💪 想再玩一次、❤️ 我喜歡,可以一次點好幾句)送出,馬上就會出現,畫面上會顯示每一句被選了幾次;也可以自己打字(暱稱可不填),審核通過後才會出現(電話、Email 這類個人資料會被擋下來)。'
+          },
           {
             v: 'v6',
             d: '2026-09-16',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useGame } from '../store';
 import { type Difficulty, PRESETS } from '../game/types';
 
@@ -19,6 +19,20 @@ const DIFF_LABELS: Record<Exclude<Difficulty, 'custom'>, string> = {
 export function MenuBar({ onCustom, onRecords, onHelp, onOptions, onInstall }: Props): JSX.Element {
   const [open, setOpen] = useState<'game' | 'help' | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+
+  // 👍 like-comment-kit 首頁收合版(1013 批次 2):#hfpc-feedback-home 是靜態放在
+  // index.html 的(widget 的 <script> 要靠 document.currentScript 找自己,不能用 React
+  // 動態插 script),這裡只是把「已經存在」的節點搬進選單列右側 —— 選單列本來就吃不滿寬度,
+  // 搬進去不會多佔一行高度(不像插在頁面最上方,會把剛好塞滿視窗的手機直向版面撐出捲軸,
+  // 0916 screen-budget 的教訓:這個盤面零容錯,量出來才知道)。用 useLayoutEffect 在畫面
+  // 畫出來之前就搬,不會閃一下。沉浸模式整條 .menubar 本來就會被 CSS 藏起來,這份也會
+  // 跟著一起不見,不用另外處理。
+  const feedbackSlotRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const home = document.getElementById('hfpc-feedback-home');
+    const slot = feedbackSlotRef.current;
+    if (home && slot && home.parentElement !== slot) slot.appendChild(home);
+  }, []);
 
   const difficulty = useGame((s) => s.difficulty);
   const marks = useGame((s) => s.marks);
@@ -167,6 +181,7 @@ export function MenuBar({ onCustom, onRecords, onHelp, onOptions, onInstall }: P
           </button>
         </div>
       ) : null}
+      <span ref={feedbackSlotRef} className="menubar-feedback-slot" />
     </div>
   );
 }

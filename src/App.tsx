@@ -293,6 +293,15 @@ export default function App(): JSX.Element {
   const label = challengeLabel(challenge);
   const eff = lastResult ? lastResult.efficiency : efficiency(bbbv, clicks);
 
+  // 👍 like-comment-kit 結算畫面(1013 批次 2):#hfpc-feedback 是靜態放在 index.html 的
+  // (widget 的 <script> 靠 document.currentScript 找自己,不能用 React 動態插 script),
+  // 這裡只負責「顯示/收起」那個已經存在的節點 —— 一局結束(lastResult 有值)才顯示,
+  // 按新局(lastResult 被清成 null)就收回去,等於把它「搬進結算區」。
+  useEffect(() => {
+    const el = document.getElementById('hfpc-feedback');
+    if (el) el.style.display = lastResult ? '' : 'none';
+  }, [lastResult]);
+
   // 音訊要等第一個使用者手勢才解得開(瀏覽器自動播放政策)。
   // ★ 音樂不能在這裡無條件 play():使用者關掉音樂之後,每點一下畫面都會把它打開。
   const startAudio = useCallback(() => {
